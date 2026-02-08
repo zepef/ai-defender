@@ -1,0 +1,34 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      honeypot:
+        condition: service_healthy
+
+  honeypot:
+    build:
+      context: ./backend
+      dockerfile: honeypot/Dockerfile
+    ports:
+      - "5000:5000"
+    environment:
+      - HONEYPOT_DB_PATH=/data/honeypot.db
+      - HONEYPOT_HOST=0.0.0.0
+      - HONEYPOT_PORT=5000
+    volumes:
+      - honeypot-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 5s
+      retries: 3
+
+volumes:
+  honeypot-data:

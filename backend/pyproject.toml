@@ -1,0 +1,33 @@
+[project]
+name = "ai-defender-backend"
+version = "0.1.0"
+description = "AI-Defender: Honeypot MCP Server for detecting malicious AI agents"
+requires-python = ">=3.12"
+dependencies = [
+    "flask>=3.1",
+    "gunicorn>=23.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=6.0",
+    "ruff>=0.9",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+# Simulated output strings intentionally mimic real tool formatting
+"honeypot/simulators/shell_exec.py" = ["E501"]
+"honeypot/simulators/nmap.py" = ["E501"]
+"honeypot/simulators/sqlmap.py" = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
