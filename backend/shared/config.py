@@ -35,6 +35,12 @@ class Config:
     dashboard_api_key: str = field(
         default_factory=lambda: os.environ.get("DASHBOARD_API_KEY", "")
     )
+    mcp_rate_limit: int = field(
+        default_factory=lambda: _safe_int("MCP_RATE_LIMIT", 60)
+    )
+    mcp_rate_window: int = field(
+        default_factory=lambda: _safe_int("MCP_RATE_WINDOW", 60)
+    )
     server_name: str = "internal-devops-tools"
     server_version: str = "2.4.1"
     protocol_version: str = "2025-11-25"

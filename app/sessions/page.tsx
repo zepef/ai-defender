@@ -17,8 +17,8 @@ export default async function SessionsPage({
   searchParams: Promise<{ [key: string]: string | undefined }>;
 }) {
   const params = await searchParams;
-  const limit = Number(params.limit) || 20;
-  const offset = Number(params.offset) || 0;
+  const limit = Math.max(1, Math.min(Number(params.limit) || 20, 200));
+  const offset = Math.max(0, Number(params.offset) || 0);
 
   let data;
   let apiError = false;

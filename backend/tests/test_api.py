@@ -148,12 +148,12 @@ class TestAllTokensEndpoint:
         assert len(data["tokens"]) == 2
 
     def test_all_tokens_filter_type(self, client, session_id, config):
-        log_honey_token(config.db_path, session_id, "aws", "AKIA1", "env")
-        log_honey_token(config.db_path, session_id, "api", "sk-2", "config")
-        resp = client.get("/api/tokens?token_type=aws")
+        log_honey_token(config.db_path, session_id, "aws_access_key", "AKIA1", "env")
+        log_honey_token(config.db_path, session_id, "api_token", "sk-2", "config")
+        resp = client.get("/api/tokens?token_type=aws_access_key")
         data = resp.get_json()
         assert data["total"] == 1
-        assert data["tokens"][0]["token_type"] == "aws"
+        assert data["tokens"][0]["token_type"] == "aws_access_key"
 
     def test_all_tokens_pagination(self, client, session_id, config):
         for i in range(5):

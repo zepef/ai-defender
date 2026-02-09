@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSession, getSessionInteractions, getSessionTokens } from "@/lib/api";
+import { truncate, duration } from "@/lib/utils";
 import { StatCard } from "@/components/stat-card";
 import { EscalationBadge } from "@/components/escalation-badge";
 import { TokenTypeBadge } from "@/components/token-type-badge";
@@ -18,26 +19,18 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-function truncate(s: string, max: number): string {
-  return s.length > max ? s.slice(0, max) + "..." : s;
-}
-
-function duration(start: string, end: string): string {
-  const ms = new Date(end).getTime() - new Date(start).getTime();
-  const secs = Math.floor(ms / 1000);
-  if (secs < 60) return `${secs}s`;
-  const mins = Math.floor(secs / 60);
-  if (mins < 60) return `${mins}m ${secs % 60}s`;
-  const hours = Math.floor(mins / 60);
-  return `${hours}h ${mins % 60}m`;
-}
+const TIMELINE_PAGE_SIZE = 50;
 
 export default async function SessionDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ [key: string]: string | undefined }>;
 }) {
   const { id } = await params;
+  const query = await searchParams;
+  const timelineOffset = Math.max(0, Number(query.toff) || 0);
 
   let session;
   let interactionsData;
@@ -46,7 +39,7 @@ export default async function SessionDetailPage({
   try {
     [session, interactionsData, tokensData] = await Promise.all([
       getSession(id),
-      getSessionInteractions(id),
+      getSessionInteractions(id, { limit: TIMELINE_PAGE_SIZE, offset: timelineOffset }),
       getSessionTokens(id),
     ]);
   } catch (err) {
@@ -57,7 +50,10 @@ export default async function SessionDetailPage({
   if (!session) notFound();
 
   const interactions = interactionsData.interactions;
+  const interactionTotal = interactionsData.total;
   const tokens = tokensData.tokens;
+  const hasTimelinePrev = timelineOffset > 0;
+  const hasTimelineNext = timelineOffset + TIMELINE_PAGE_SIZE < interactionTotal;
 
   return (
     <div className="space-y-6">
@@ -99,44 +95,70 @@ export default async function SessionDetailPage({
         </TabsList>
 
         <TabsContent value="timeline" className="mt-4">
-          {interactions.length === 0 ? (
+          {interactions.length === 0 && timelineOffset === 0 ? (
             <p className="text-muted-foreground">No interactions recorded.</p>
           ) : (
-            <ScrollArea className="h-[500px] rounded-md border border-border">
-              <div className="divide-y divide-border">
-                {interactions.map((i) => (
-                  <div key={i.id} className="flex gap-4 p-4">
-                    <div className="flex flex-col items-center gap-1">
-                      <div className="h-2 w-2 rounded-full bg-primary" />
-                      <div className="flex-1 w-px bg-border" />
-                    </div>
-                    <div className="flex-1 space-y-1">
-                      <div className="flex items-center gap-2">
-                        {i.tool_name && (
-                          <Badge variant="outline" className="font-mono text-xs">
-                            {i.tool_name}
-                          </Badge>
-                        )}
-                        <span className="text-xs text-muted-foreground">
-                          {i.method}
-                        </span>
-                        {i.escalation_delta > 0 && (
-                          <Badge className="bg-red-900/50 text-red-400 text-xs hover:bg-red-900/50">
-                            +{i.escalation_delta}
-                          </Badge>
-                        )}
-                        <span className="ml-auto text-xs text-muted-foreground">
-                          <RelativeTime iso={i.timestamp} />
-                        </span>
+            <>
+              <ScrollArea className="h-[500px] rounded-md border border-border">
+                <div className="divide-y divide-border">
+                  {interactions.map((i) => (
+                    <div key={i.id} className="flex gap-4 p-4">
+                      <div className="flex flex-col items-center gap-1">
+                        <div className="h-2 w-2 rounded-full bg-primary" />
+                        <div className="flex-1 w-px bg-border" />
                       </div>
-                      <pre className="text-xs text-muted-foreground whitespace-pre-wrap break-all">
-                        {truncate(JSON.stringify(i.params, null, 2), 300)}
-                      </pre>
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center gap-2">
+                          {i.tool_name && (
+                            <Badge variant="outline" className="font-mono text-xs">
+                              {i.tool_name}
+                            </Badge>
+                          )}
+                          <span className="text-xs text-muted-foreground">
+                            {i.method}
+                          </span>
+                          {i.escalation_delta > 0 && (
+                            <Badge className="bg-red-900/50 text-red-400 text-xs hover:bg-red-900/50">
+                              +{i.escalation_delta}
+                            </Badge>
+                          )}
+                          <span className="ml-auto text-xs text-muted-foreground">
+                            <RelativeTime iso={i.timestamp} />
+                          </span>
+                        </div>
+                        <pre className="text-xs text-muted-foreground whitespace-pre-wrap break-all">
+                          {truncate(JSON.stringify(i.params, null, 2), 300)}
+                        </pre>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+              </ScrollArea>
+              <div className="flex items-center justify-between mt-3">
+                <p className="text-sm text-muted-foreground">
+                  Showing {timelineOffset + 1}-{Math.min(timelineOffset + TIMELINE_PAGE_SIZE, interactionTotal)} of{" "}
+                  {interactionTotal} interactions
+                </p>
+                <div className="flex gap-2">
+                  {hasTimelinePrev && (
+                    <Link
+                      href={`/sessions/${id}?toff=${Math.max(0, timelineOffset - TIMELINE_PAGE_SIZE)}`}
+                      className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-accent"
+                    >
+                      Previous
+                    </Link>
+                  )}
+                  {hasTimelineNext && (
+                    <Link
+                      href={`/sessions/${id}?toff=${timelineOffset + TIMELINE_PAGE_SIZE}`}
+                      className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-accent"
+                    >
+                      Next
+                    </Link>
+                  )}
+                </div>
               </div>
-            </ScrollArea>
+            </>
           )}
         </TabsContent>
 

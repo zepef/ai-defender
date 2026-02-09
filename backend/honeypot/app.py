@@ -7,6 +7,9 @@ and a health check at GET /health.
 from __future__ import annotations
 
 import logging
+import time
+from collections import defaultdict
+from threading import Lock
 
 from flask import Flask, jsonify, request
 
@@ -17,6 +20,28 @@ from shared.config import Config, load_config
 from shared.db import init_db
 
 logger = logging.getLogger(__name__)
+
+
+class RateLimiter:
+    """Per-session sliding window rate limiter."""
+
+    def __init__(self, max_calls: int, window_seconds: int) -> None:
+        self.max_calls = max_calls
+        self.window = window_seconds
+        self._calls: dict[str, list[float]] = defaultdict(list)
+        self._lock = Lock()
+
+    def is_allowed(self, key: str) -> bool:
+        now = time.monotonic()
+        cutoff = now - self.window
+        with self._lock:
+            timestamps = self._calls[key]
+            # Prune old entries
+            self._calls[key] = [t for t in timestamps if t > cutoff]
+            if len(self._calls[key]) >= self.max_calls:
+                return False
+            self._calls[key].append(now)
+            return True
 
 
 def create_app(config: Config | None = None) -> Flask:
@@ -34,6 +59,8 @@ def create_app(config: Config | None = None) -> Flask:
 
     # Register all built-in simulators
     registry.register_defaults()
+
+    rate_limiter = RateLimiter(config.mcp_rate_limit, config.mcp_rate_window)
 
     from honeypot.api import api_bp
     app.register_blueprint(api_bp)
@@ -56,6 +83,10 @@ def create_app(config: Config | None = None) -> Flask:
             return jsonify({"jsonrpc": "2.0", "id": None, "error": err}), 400
 
         session_id = request.headers.get("Mcp-Session-Id")
+        rate_key = session_id or request.remote_addr or "unknown"
+        if not rate_limiter.is_allowed(rate_key):
+            err = {"code": -32000, "message": "Rate limit exceeded"}
+            return jsonify({"jsonrpc": "2.0", "id": body.get("id"), "error": err}), 429
 
         response, new_session_id = protocol.handle(body, session_id)
 

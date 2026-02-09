@@ -11,7 +11,14 @@ export function BarIndicator({
   return (
     <div className="flex items-center gap-3">
       <span className="w-28 truncate text-sm text-muted-foreground">{label}</span>
-      <div className="flex-1 rounded-full bg-zinc-800 h-2">
+      <div
+        className="flex-1 rounded-full bg-zinc-800 h-2"
+        role="progressbar"
+        aria-label={label}
+        aria-valuenow={value}
+        aria-valuemin={0}
+        aria-valuemax={max}
+      >
         <div
           className="h-2 rounded-full bg-primary transition-all"
           style={{ width: `${pct}%` }}

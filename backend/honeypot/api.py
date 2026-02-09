@@ -17,9 +17,20 @@ from shared.db import (
 
 api_bp = Blueprint("api", __name__, url_prefix="/api")
 
+VALID_TOKEN_TYPES = {"aws_access_key", "api_token", "db_credential", "admin_login", "ssh_key"}
+MAX_LIMIT = 200
+
 
 def _db_path() -> str:
     return current_app.config["HONEYPOT"].db_path
+
+
+def _clamp_pagination() -> tuple[int, int]:
+    limit = request.args.get("limit", 50, type=int)
+    offset = request.args.get("offset", 0, type=int)
+    limit = max(1, min(limit, MAX_LIMIT))
+    offset = max(0, offset)
+    return limit, offset
 
 
 @api_bp.before_request
@@ -50,9 +61,10 @@ def stats():
 @api_bp.route("/sessions")
 def sessions():
     escalation = request.args.get("escalation_level", type=int)
+    if escalation is not None:
+        escalation = max(0, min(escalation, 3))
     since = request.args.get("since")
-    limit = request.args.get("limit", 50, type=int)
-    offset = request.args.get("offset", 0, type=int)
+    limit, offset = _clamp_pagination()
     rows, total = get_all_sessions(_db_path(), escalation, since, limit, offset)
     return jsonify({"sessions": rows, "total": total, "limit": limit, "offset": offset})
 
@@ -74,8 +86,7 @@ def session_interactions(session_id: str):
     session = get_session(_db_path(), session_id)
     if session is None:
         return jsonify({"error": "Session not found"}), 404
-    limit = request.args.get("limit", 100, type=int)
-    offset = request.args.get("offset", 0, type=int)
+    limit, offset = _clamp_pagination()
     rows, total = get_session_interactions(_db_path(), session_id, limit, offset)
     return jsonify({"interactions": rows, "total": total, "limit": limit, "offset": offset})
 
@@ -92,7 +103,8 @@ def session_tokens(session_id: str):
 @api_bp.route("/tokens")
 def tokens():
     token_type = request.args.get("token_type")
-    limit = request.args.get("limit", 50, type=int)
-    offset = request.args.get("offset", 0, type=int)
+    if token_type and token_type not in VALID_TOKEN_TYPES:
+        return jsonify({"error": f"Invalid token_type, must be one of: {', '.join(sorted(VALID_TOKEN_TYPES))}"}), 400
+    limit, offset = _clamp_pagination()
     rows, total = get_all_tokens(_db_path(), token_type, limit, offset)
     return jsonify({"tokens": rows, "total": total, "limit": limit, "offset": offset})

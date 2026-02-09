@@ -19,7 +19,7 @@ export function Sidebar() {
         <h1 className="text-lg font-bold text-zinc-100">AI-Defender</h1>
         <p className="text-xs text-zinc-500">Honeypot Dashboard</p>
       </div>
-      <nav className="flex flex-col gap-1">
+      <nav aria-label="Main navigation" className="flex flex-col gap-1">
         {navItems.map((item) => {
           const isActive =
             item.href === "/"
@@ -29,6 +29,7 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              aria-current={isActive ? "page" : undefined}
               className={cn(
                 "rounded-md px-3 py-2 text-sm font-medium transition-colors",
                 isActive
