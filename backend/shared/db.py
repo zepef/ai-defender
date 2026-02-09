@@ -140,3 +140,153 @@ def log_honey_token(db_path: str, session_id: str, token_type: str,
             (session_id, token_type, token_value, context, now_iso(), interaction_id),
         )
         return cursor.lastrowid
+
+
+# ---------------------------------------------------------------------------
+# Dashboard query functions
+# ---------------------------------------------------------------------------
+
+def get_stats(db_path: str) -> dict:
+    with get_connection(db_path) as conn:
+        total_sessions = conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
+        active_sessions = conn.execute(
+            "SELECT COUNT(*) FROM sessions WHERE last_seen_at >= datetime('now', '-1 hour')"
+        ).fetchone()[0]
+        avg_row = conn.execute("SELECT AVG(escalation_level) FROM sessions").fetchone()
+        avg_escalation = round(avg_row[0], 2) if avg_row[0] is not None else 0
+        total_interactions = conn.execute("SELECT COUNT(*) FROM interactions").fetchone()[0]
+        total_tokens = conn.execute("SELECT COUNT(*) FROM honey_tokens").fetchone()[0]
+
+        tool_usage = {}
+        for row in conn.execute(
+            "SELECT tool_name, COUNT(*) as cnt FROM interactions "
+            "WHERE tool_name IS NOT NULL GROUP BY tool_name ORDER BY cnt DESC"
+        ):
+            tool_usage[row["tool_name"]] = row["cnt"]
+
+        token_type_breakdown = {}
+        for row in conn.execute(
+            "SELECT token_type, COUNT(*) as cnt FROM honey_tokens "
+            "GROUP BY token_type ORDER BY cnt DESC"
+        ):
+            token_type_breakdown[row["token_type"]] = row["cnt"]
+
+        escalation_distribution = {}
+        for row in conn.execute(
+            "SELECT escalation_level, COUNT(*) as cnt FROM sessions "
+            "GROUP BY escalation_level ORDER BY escalation_level"
+        ):
+            escalation_distribution[str(row["escalation_level"])] = row["cnt"]
+
+    return {
+        "total_sessions": total_sessions,
+        "active_sessions": active_sessions,
+        "avg_escalation": avg_escalation,
+        "total_interactions": total_interactions,
+        "total_tokens": total_tokens,
+        "tool_usage": tool_usage,
+        "token_type_breakdown": token_type_breakdown,
+        "escalation_distribution": escalation_distribution,
+    }
+
+
+def get_all_sessions(db_path: str, escalation_level: int | None = None,
+                     since: str | None = None, limit: int = 50,
+                     offset: int = 0) -> tuple[list[dict], int]:
+    where_parts: list[str] = []
+    params: list = []
+    if escalation_level is not None:
+        where_parts.append("s.escalation_level = ?")
+        params.append(escalation_level)
+    if since:
+        where_parts.append("s.started_at >= ?")
+        params.append(since)
+    where_clause = f"WHERE {' AND '.join(where_parts)}" if where_parts else ""
+
+    with get_connection(db_path) as conn:
+        total = conn.execute(
+            f"SELECT COUNT(*) FROM sessions s {where_clause}", params
+        ).fetchone()[0]
+
+        rows = conn.execute(
+            f"""SELECT s.id, s.client_info, s.started_at, s.last_seen_at,
+                       s.escalation_level,
+                       COUNT(DISTINCT i.id) as interaction_count,
+                       COUNT(DISTINCT h.id) as token_count
+                FROM sessions s
+                LEFT JOIN interactions i ON i.session_id = s.id
+                LEFT JOIN honey_tokens h ON h.session_id = s.id
+                {where_clause}
+                GROUP BY s.id
+                ORDER BY s.started_at DESC
+                LIMIT ? OFFSET ?""",
+            params + [limit, offset],
+        ).fetchall()
+
+    sessions = []
+    for row in rows:
+        d = dict(row)
+        d["client_info"] = json.loads(d["client_info"])
+        sessions.append(d)
+    return sessions, total
+
+
+def get_session_interactions(db_path: str, session_id: str,
+                             limit: int = 100,
+                             offset: int = 0) -> tuple[list[dict], int]:
+    with get_connection(db_path) as conn:
+        total = conn.execute(
+            "SELECT COUNT(*) FROM interactions WHERE session_id = ?",
+            (session_id,),
+        ).fetchone()[0]
+
+        rows = conn.execute(
+            """SELECT id, timestamp, method, tool_name, params, response, escalation_delta
+               FROM interactions WHERE session_id = ?
+               ORDER BY timestamp ASC LIMIT ? OFFSET ?""",
+            (session_id, limit, offset),
+        ).fetchall()
+
+    interactions = []
+    for row in rows:
+        d = dict(row)
+        d["params"] = json.loads(d["params"])
+        d["response"] = json.loads(d["response"])
+        interactions.append(d)
+    return interactions, total
+
+
+def get_session_tokens(db_path: str, session_id: str) -> list[dict]:
+    with get_connection(db_path) as conn:
+        rows = conn.execute(
+            """SELECT id, token_type, token_value, context, deployed_at, interaction_id
+               FROM honey_tokens WHERE session_id = ?
+               ORDER BY deployed_at ASC""",
+            (session_id,),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_all_tokens(db_path: str, token_type: str | None = None,
+                   limit: int = 50, offset: int = 0) -> tuple[list[dict], int]:
+    where_parts: list[str] = []
+    params: list = []
+    if token_type:
+        where_parts.append("token_type = ?")
+        params.append(token_type)
+    where_clause = f"WHERE {' AND '.join(where_parts)}" if where_parts else ""
+
+    with get_connection(db_path) as conn:
+        total = conn.execute(
+            f"SELECT COUNT(*) FROM honey_tokens {where_clause}", params
+        ).fetchone()[0]
+
+        rows = conn.execute(
+            f"""SELECT id, session_id, token_type, token_value, context,
+                       deployed_at, interaction_id
+                FROM honey_tokens {where_clause}
+                ORDER BY deployed_at DESC LIMIT ? OFFSET ?""",
+            params + [limit, offset],
+        ).fetchall()
+
+    return [dict(row) for row in rows], total

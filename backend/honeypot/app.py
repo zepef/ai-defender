@@ -35,6 +35,9 @@ def create_app(config: Config | None = None) -> Flask:
     # Register all built-in simulators
     registry.register_defaults()
 
+    from honeypot.api import api_bp
+    app.register_blueprint(api_bp)
+
     @app.route("/health", methods=["GET"])
     def health():
         return jsonify({"status": "ok", "server": config.server_name,

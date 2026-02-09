@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "hexstrike-ai": {
+      "command": "./tools/hexstrike-ai/.venv/bin/python3",
+      "args": [
+        "./tools/hexstrike-mcp-wrapper.py",
+        "--server",
+        "http://127.0.0.1:8888"
+      ],
+      "timeout": 300
+    }
+  }
+}

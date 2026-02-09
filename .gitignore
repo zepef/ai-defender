@@ -54,6 +54,15 @@ venv/
 *.db-journal
 *.db-wal
 
+# MCP config (contains local paths)
+.mcp.json
+
+# HexStrike logs
+hexstrike.log
+
+# HexStrike venv
+tools/hexstrike-ai/.venv/
+
 # IDE
 .idea/
 .vscode/
