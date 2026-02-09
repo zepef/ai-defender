@@ -62,6 +62,9 @@ def create_app(config: Config | None = None) -> Flask:
 
     rate_limiter = RateLimiter(config.mcp_rate_limit, config.mcp_rate_window)
 
+    dashboard_rate_limiter = RateLimiter(max_calls=120, window_seconds=60)
+    app.config["DASHBOARD_RATE_LIMITER"] = dashboard_rate_limiter
+
     from honeypot.api import api_bp
     app.register_blueprint(api_bp)
 

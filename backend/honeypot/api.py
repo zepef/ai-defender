@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import logging
 import secrets
 import time
+from threading import Lock
 
 from flask import Blueprint, Response, current_app, jsonify, request
 
@@ -17,10 +19,17 @@ from shared.db import (
     get_stats,
 )
 
+logger = logging.getLogger(__name__)
+
 api_bp = Blueprint("api", __name__, url_prefix="/api")
 
 VALID_TOKEN_TYPES = {"aws_access_key", "api_token", "db_credential", "admin_login", "ssh_key"}
 MAX_LIMIT = 200
+SSE_MAX_CONNECTIONS = 10
+SSE_MAX_DURATION = 300  # 5 minutes
+
+_sse_connections = 0
+_sse_lock = Lock()
 
 
 def _db_path() -> str:
@@ -52,6 +61,17 @@ def _check_api_key():
     if not secrets.compare_digest(provided, api_key):
         return jsonify({"error": "Invalid API key"}), 401
 
+    return None
+
+
+@api_bp.before_request
+def _check_dashboard_rate_limit():
+    rate_limiter = current_app.config.get("DASHBOARD_RATE_LIMITER")
+    if rate_limiter is None:
+        return None
+    key = request.remote_addr or "unknown"
+    if not rate_limiter.is_allowed(key):
+        return jsonify({"error": "Rate limit exceeded"}), 429
     return None
 
 
@@ -116,26 +136,44 @@ def tokens():
 def events():
     """Server-Sent Events stream for real-time dashboard updates.
 
-    Polls the database every 2 seconds and sends stats snapshots
-    to connected clients.
+    Polls the database and sends stats snapshots to connected clients.
+    Enforces a maximum connection count and connection lifetime.
     """
+    global _sse_connections
+
+    with _sse_lock:
+        if _sse_connections >= SSE_MAX_CONNECTIONS:
+            return jsonify({"error": "Too many SSE connections"}), 429
+        _sse_connections += 1
+
     interval = request.args.get("interval", 2, type=int)
-    interval = max(1, min(interval, 30))
+    interval = max(2, min(interval, 30))
+    db_path = _db_path()
 
     def generate():
+        global _sse_connections
+        start = time.monotonic()
         last_stats = None
-        while True:
-            try:
-                stats_data = get_stats(_db_path())
-                # Only send when data changes
-                if stats_data != last_stats:
-                    yield f"data: {json.dumps(stats_data)}\n\n"
-                    last_stats = stats_data
-                else:
-                    yield ": heartbeat\n\n"
-            except Exception:
-                yield f"event: error\ndata: {{\"message\": \"Database read error\"}}\n\n"
-            time.sleep(interval)
+        try:
+            while time.monotonic() - start < SSE_MAX_DURATION:
+                try:
+                    stats_data = get_stats(db_path)
+                    if stats_data != last_stats:
+                        yield f"data: {json.dumps(stats_data)}\n\n"
+                        last_stats = stats_data
+                    else:
+                        yield ": heartbeat\n\n"
+                except Exception:
+                    logger.exception("SSE: database read error")
+                    yield f"event: error\ndata: {{\"message\": \"Database read error\"}}\n\n"
+                time.sleep(interval)
+            # Stream expired, tell client to reconnect
+            yield f"event: reconnect\ndata: {{\"reason\": \"max duration reached\"}}\n\n"
+        except GeneratorExit:
+            logger.debug("SSE: client disconnected")
+        finally:
+            with _sse_lock:
+                _sse_connections -= 1
 
     return Response(generate(), mimetype="text/event-stream",
                     headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
