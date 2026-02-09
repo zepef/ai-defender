@@ -68,6 +68,20 @@ def create_app(config: Config | None = None) -> Flask:
     from honeypot.api import api_bp
     app.register_blueprint(api_bp)
 
+    @app.after_request
+    def _set_security_headers(response):
+        origin = request.headers.get("Origin", "")
+        allowed = config.cors_origin
+        if origin == allowed:
+            response.headers["Access-Control-Allow-Origin"] = allowed
+            response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        return response
+
     @app.route("/health", methods=["GET"])
     def health():
         return jsonify({"status": "ok", "server": config.server_name,

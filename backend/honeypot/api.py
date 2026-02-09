@@ -45,6 +45,17 @@ def _clamp_pagination() -> tuple[int, int]:
 
 
 @api_bp.before_request
+def _check_dashboard_rate_limit():
+    rate_limiter = current_app.config.get("DASHBOARD_RATE_LIMITER")
+    if rate_limiter is None:
+        return None
+    key = request.remote_addr or "unknown"
+    if not rate_limiter.is_allowed(key):
+        return jsonify({"error": "Rate limit exceeded"}), 429
+    return None
+
+
+@api_bp.before_request
 def _check_api_key():
     if current_app.config.get("TESTING"):
         return None
@@ -55,23 +66,14 @@ def _check_api_key():
 
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
+        logger.warning("Dashboard auth failure from %s", request.remote_addr)
         return jsonify({"error": "Missing or invalid Authorization header"}), 401
 
     provided = auth_header[7:]
     if not secrets.compare_digest(provided, api_key):
+        logger.warning("Dashboard invalid API key from %s", request.remote_addr)
         return jsonify({"error": "Invalid API key"}), 401
 
-    return None
-
-
-@api_bp.before_request
-def _check_dashboard_rate_limit():
-    rate_limiter = current_app.config.get("DASHBOARD_RATE_LIMITER")
-    if rate_limiter is None:
-        return None
-    key = request.remote_addr or "unknown"
-    if not rate_limiter.is_allowed(key):
-        return jsonify({"error": "Rate limit exceeded"}), 429
     return None
 
 

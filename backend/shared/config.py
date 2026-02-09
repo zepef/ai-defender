@@ -41,6 +41,9 @@ class Config:
     mcp_rate_window: int = field(
         default_factory=lambda: _safe_int("MCP_RATE_WINDOW", 60)
     )
+    cors_origin: str = field(
+        default_factory=lambda: os.environ.get("DASHBOARD_CORS_ORIGIN", "http://localhost:3000")
+    )
     server_name: str = "internal-devops-tools"
     server_version: str = "2.4.1"
     protocol_version: str = "2025-11-25"

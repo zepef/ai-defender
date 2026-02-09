@@ -6,15 +6,10 @@ import type {
   SessionDetail,
 } from "./types";
 
-const API_BASE = process.env.API_URL || "http://localhost:5000";
-const API_KEY = process.env.DASHBOARD_API_KEY || "";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
 async function fetchApi<T>(path: string): Promise<T> {
-  const headers: Record<string, string> = {};
-  if (API_KEY) {
-    headers["Authorization"] = `Bearer ${API_KEY}`;
-  }
-  const res = await fetch(`${API_BASE}${path}`, { cache: "no-store", headers });
+  const res = await fetch(`${API_BASE}${path}`, { cache: "no-store" });
   if (!res.ok) {
     throw new Error(`API error: ${res.status} ${res.statusText}`);
   }
