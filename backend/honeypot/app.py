@@ -7,6 +7,7 @@ and a health check at GET /health.
 from __future__ import annotations
 
 import logging
+import re
 import time
 from collections import defaultdict
 from threading import Lock
@@ -20,6 +21,8 @@ from shared.config import Config, load_config
 from shared.db import init_db
 
 logger = logging.getLogger(__name__)
+
+_SESSION_ID_RE = re.compile(r"^[0-9a-f]{32}$")
 
 
 class RateLimiter:
@@ -100,6 +103,10 @@ def create_app(config: Config | None = None) -> Flask:
             return jsonify({"jsonrpc": "2.0", "id": None, "error": err}), 400
 
         session_id = request.headers.get("Mcp-Session-Id")
+        if session_id and not _SESSION_ID_RE.match(session_id):
+            err = {"code": -32600, "message": "Invalid session ID format"}
+            return jsonify({"jsonrpc": "2.0", "id": body.get("id"), "error": err}), 400
+
         rate_key = session_id or request.remote_addr or "unknown"
         if not rate_limiter.is_allowed(rate_key):
             err = {"code": -32000, "message": "Rate limit exceeded"}

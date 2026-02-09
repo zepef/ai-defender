@@ -1,10 +1,13 @@
 """Tests for the dashboard REST API."""
 
 import json
+from unittest.mock import patch, MagicMock
 
 import pytest
 
 from shared.db import log_honey_token, log_interaction, update_session
+
+import honeypot.api as _api_module
 
 
 class TestStatsEndpoint:
@@ -162,3 +165,72 @@ class TestAllTokensEndpoint:
         data = resp.get_json()
         assert data["total"] == 5
         assert len(data["tokens"]) == 2
+
+
+class TestSSEEndpoint:
+    """Tests for the GET /api/events Server-Sent Events endpoint."""
+
+    def test_sse_returns_event_stream(self, client, monkeypatch):
+        """GET /api/events returns content-type text/event-stream."""
+        monkeypatch.setattr(_api_module, "_sse_connections", 0)
+        monkeypatch.setattr(_api_module, "SSE_MAX_DURATION", 0.001)
+        with patch("honeypot.api.time.sleep"):
+            resp = client.get("/api/events")
+        assert resp.status_code == 200
+        assert resp.content_type.startswith("text/event-stream")
+
+    def test_sse_returns_data(self, client, monkeypatch):
+        """Response body starts with 'data: ' and contains valid JSON."""
+        monkeypatch.setattr(_api_module, "_sse_connections", 0)
+        monkeypatch.setattr(_api_module, "SSE_MAX_DURATION", 0.001)
+        with patch("honeypot.api.time.sleep"):
+            resp = client.get("/api/events")
+            body = resp.get_data(as_text=True)
+
+        # The body should contain at least one data frame with a JSON payload
+        lines = body.strip().split("\n")
+        data_lines = [ln for ln in lines if ln.startswith("data: ")]
+        assert len(data_lines) >= 1, f"Expected at least one 'data: ' line, got: {body!r}"
+
+        # The first data line must carry valid JSON (the stats snapshot)
+        first_payload = data_lines[0][len("data: "):]
+        parsed = json.loads(first_payload)
+        assert isinstance(parsed, dict)
+
+    def test_sse_interval_clamped(self, client, monkeypatch):
+        """The interval query parameter is clamped between 2 and 30."""
+        monkeypatch.setattr(_api_module, "SSE_MAX_DURATION", 0.001)
+
+        # interval=0 should be clamped UP to 2
+        monkeypatch.setattr(_api_module, "_sse_connections", 0)
+        with patch("honeypot.api.time.sleep") as mock_sleep:
+            resp = client.get("/api/events?interval=0")
+            resp.get_data()  # consume the generator fully
+        assert resp.status_code == 200
+        assert mock_sleep.call_count >= 1, "time.sleep should have been called"
+        assert mock_sleep.call_args_list[0].args[0] == 2, (
+            f"interval=0 should clamp to 2, got {mock_sleep.call_args_list[0].args[0]}"
+        )
+
+        # interval=999 should be clamped DOWN to 30
+        monkeypatch.setattr(_api_module, "_sse_connections", 0)
+        with patch("honeypot.api.time.sleep") as mock_sleep:
+            resp = client.get("/api/events?interval=999")
+            resp.get_data()  # consume the generator fully
+        assert resp.status_code == 200
+        assert mock_sleep.call_count >= 1, "time.sleep should have been called"
+        assert mock_sleep.call_args_list[0].args[0] == 30, (
+            f"interval=999 should clamp to 30, got {mock_sleep.call_args_list[0].args[0]}"
+        )
+
+    def test_sse_connection_limit(self, client, monkeypatch):
+        """When SSE_MAX_CONNECTIONS is reached, returns 429."""
+        # Simulate that we already have the maximum number of connections
+        monkeypatch.setattr(_api_module, "_sse_connections", 10)
+        monkeypatch.setattr(_api_module, "SSE_MAX_CONNECTIONS", 10)
+
+        resp = client.get("/api/events")
+        assert resp.status_code == 429
+        data = resp.get_json()
+        assert "error" in data
+        assert "Too many" in data["error"]

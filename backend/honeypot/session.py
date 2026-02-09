@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import logging
 import time
 import uuid
 from dataclasses import dataclass, field
-from threading import Lock
+from threading import Lock, Thread
 
 from shared.config import Config
 from shared.db import create_session, get_session, update_session
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -53,11 +56,15 @@ class SessionContext:
 
 
 class SessionManager:
+    _EVICTION_INTERVAL = 60  # seconds between background eviction runs
+
     def __init__(self, config: Config) -> None:
         self.config = config
         self._cache: dict[str, SessionContext] = {}
         self._cache_times: dict[str, float] = {}
         self._lock = Lock()
+        self._eviction_thread = Thread(target=self._eviction_loop, daemon=True)
+        self._eviction_thread.start()
 
     def _evict_stale(self) -> None:
         """Remove cache entries older than session_ttl_seconds. Must hold _lock."""
@@ -66,6 +73,15 @@ class SessionManager:
         for sid in stale:
             self._cache.pop(sid, None)
             self._cache_times.pop(sid, None)
+        if stale:
+            logger.debug("Evicted %d stale session(s) from cache", len(stale))
+
+    def _eviction_loop(self) -> None:
+        """Background loop that periodically evicts stale cache entries."""
+        while True:
+            time.sleep(self._EVICTION_INTERVAL)
+            with self._lock:
+                self._evict_stale()
 
     def create(self, client_info: dict) -> str:
         session_id = uuid.uuid4().hex

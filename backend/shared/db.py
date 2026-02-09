@@ -88,14 +88,24 @@ def create_session(db_path: str, session_id: str, client_info: dict) -> None:
         )
 
 
+_ALLOWED_SESSION_FIELDS = frozenset({
+    "escalation_level", "discovered_hosts", "discovered_ports",
+    "discovered_files", "discovered_credentials", "metadata",
+})
+_JSON_SESSION_FIELDS = frozenset({
+    "discovered_hosts", "discovered_ports", "discovered_files",
+    "discovered_credentials", "metadata",
+})
+
+
 def update_session(db_path: str, session_id: str, **fields) -> None:
-    json_fields = {"discovered_hosts", "discovered_ports", "discovered_files",
-                   "discovered_credentials", "metadata"}
     set_parts = ["last_seen_at = ?"]
     values = [now_iso()]
     for key, value in fields.items():
+        if key not in _ALLOWED_SESSION_FIELDS:
+            raise ValueError(f"Invalid session field: {key}")
         set_parts.append(f"{key} = ?")
-        values.append(json.dumps(value) if key in json_fields else value)
+        values.append(json.dumps(value) if key in _JSON_SESSION_FIELDS else value)
     values.append(session_id)
     with get_connection(db_path) as conn:
         conn.execute(
