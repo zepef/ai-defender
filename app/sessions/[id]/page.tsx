@@ -42,8 +42,7 @@ export default async function SessionDetailPage({
       getSessionInteractions(id, { limit: TIMELINE_PAGE_SIZE, offset: timelineOffset }),
       getSessionTokens(id),
     ]);
-  } catch (err) {
-    console.error("Failed to fetch session detail:", err);
+  } catch {
     notFound();
   }
 

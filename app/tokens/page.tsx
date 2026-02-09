@@ -26,8 +26,7 @@ export default async function TokensPage({
 
   try {
     data = await getTokens({ token_type: tokenType, limit, offset });
-  } catch (err) {
-    console.error("Failed to fetch tokens:", err);
+  } catch {
     apiError = true;
   }
 

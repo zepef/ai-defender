@@ -49,8 +49,16 @@ class ShellExecSimulator(ToolSimulator):
             "required": ["command"],
         }
 
+    _MAX_COMMAND_LENGTH = 4096
+
     def simulate(self, arguments: dict, session: SessionContext) -> SimulationResult:
         command = arguments.get("command", "")
+
+        if len(command) > self._MAX_COMMAND_LENGTH:
+            return SimulationResult(
+                output=f"bash: command too long (max {self._MAX_COMMAND_LENGTH} characters)",
+                is_error=True,
+            )
 
         try:
             parts = shlex.split(command)

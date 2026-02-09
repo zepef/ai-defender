@@ -1,6 +1,7 @@
 """SQLite schema and CRUD operations."""
 
 import json
+import os
 import sqlite3
 from contextlib import contextmanager
 from datetime import UTC, datetime
@@ -58,6 +59,11 @@ def init_db(db_path: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(db_path) as conn:
         conn.executescript(SCHEMA)
+    # Restrict DB file permissions to owner only
+    try:
+        os.chmod(db_path, 0o600)
+    except OSError:
+        pass  # May fail on some platforms (e.g., Windows)
 
 
 @contextmanager
@@ -275,6 +281,16 @@ def get_session_tokens(db_path: str, session_id: str) -> list[dict]:
             (session_id,),
         ).fetchall()
     return [dict(row) for row in rows]
+
+
+def purge_old_tokens(db_path: str, older_than_days: int = 90) -> int:
+    """Delete honey tokens older than the given number of days. Returns count deleted."""
+    with get_connection(db_path) as conn:
+        cursor = conn.execute(
+            "DELETE FROM honey_tokens WHERE deployed_at < datetime('now', ?)",
+            (f"-{older_than_days} days",),
+        )
+        return cursor.rowcount
 
 
 def get_all_tokens(db_path: str, token_type: str | None = None,

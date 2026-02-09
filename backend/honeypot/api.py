@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import secrets
 import time
+from datetime import datetime
 from threading import Lock
 
 from flask import Blueprint, Response, current_app, jsonify, request
@@ -27,6 +29,24 @@ VALID_TOKEN_TYPES = {"aws_access_key", "api_token", "db_credential", "admin_logi
 MAX_LIMIT = 200
 SSE_MAX_CONNECTIONS = 10
 SSE_MAX_DURATION = 300  # 5 minutes
+
+_SESSION_ID_RE = re.compile(r"^[0-9a-f]{32}$")
+
+
+def _validate_iso_date(value: str) -> bool:
+    """Return True if value is a valid ISO 8601 datetime string."""
+    try:
+        datetime.fromisoformat(value)
+        return True
+    except (ValueError, TypeError):
+        return False
+
+
+def _validate_session_id_param(session_id: str) -> str | None:
+    """Return an error message if session_id is invalid, else None."""
+    if not _SESSION_ID_RE.match(session_id):
+        return "Invalid session ID format"
+    return None
 
 _sse_connections = 0
 _sse_lock = Lock()
@@ -88,6 +108,8 @@ def sessions():
     if escalation is not None:
         escalation = max(0, min(escalation, 3))
     since = request.args.get("since")
+    if since and not _validate_iso_date(since):
+        return jsonify({"error": "Invalid 'since' parameter: expected ISO 8601 datetime"}), 400
     limit, offset = _clamp_pagination()
     rows, total = get_all_sessions(_db_path(), escalation, since, limit, offset)
     return jsonify({"sessions": rows, "total": total, "limit": limit, "offset": offset})
@@ -95,6 +117,9 @@ def sessions():
 
 @api_bp.route("/sessions/<session_id>")
 def session_detail(session_id: str):
+    err = _validate_session_id_param(session_id)
+    if err:
+        return jsonify({"error": err}), 400
     session = get_session(_db_path(), session_id)
     if session is None:
         return jsonify({"error": "Session not found"}), 404
@@ -107,6 +132,9 @@ def session_detail(session_id: str):
 
 @api_bp.route("/sessions/<session_id>/interactions")
 def session_interactions(session_id: str):
+    err = _validate_session_id_param(session_id)
+    if err:
+        return jsonify({"error": err}), 400
     session = get_session(_db_path(), session_id)
     if session is None:
         return jsonify({"error": "Session not found"}), 404
@@ -117,6 +145,9 @@ def session_interactions(session_id: str):
 
 @api_bp.route("/sessions/<session_id>/tokens")
 def session_tokens(session_id: str):
+    err = _validate_session_id_param(session_id)
+    if err:
+        return jsonify({"error": err}), 400
     session = get_session(_db_path(), session_id)
     if session is None:
         return jsonify({"error": "Session not found"}), 404

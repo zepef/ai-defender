@@ -92,7 +92,7 @@ class TestSessionDetailEndpoint:
         assert isinstance(data["discovered_hosts"], list)
 
     def test_session_detail_404(self, client):
-        resp = client.get("/api/sessions/nonexistent")
+        resp = client.get("/api/sessions/00000000000000000000000000000000")
         assert resp.status_code == 404
         assert "error" in resp.get_json()
 
@@ -121,7 +121,7 @@ class TestSessionInteractionsEndpoint:
         assert len(data["interactions"]) == 2
 
     def test_interactions_404(self, client):
-        resp = client.get("/api/sessions/nonexistent/interactions")
+        resp = client.get("/api/sessions/00000000000000000000000000000000/interactions")
         assert resp.status_code == 404
 
 
@@ -137,7 +137,7 @@ class TestSessionTokensEndpoint:
         assert t["token_value"] == "id_rsa..."
 
     def test_tokens_404(self, client):
-        resp = client.get("/api/sessions/nonexistent/tokens")
+        resp = client.get("/api/sessions/00000000000000000000000000000000/tokens")
         assert resp.status_code == 404
 
 
