@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import secrets
+import time
 
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, Response, current_app, jsonify, request
 
 from shared.db import (
     get_all_sessions,
@@ -108,3 +110,32 @@ def tokens():
     limit, offset = _clamp_pagination()
     rows, total = get_all_tokens(_db_path(), token_type, limit, offset)
     return jsonify({"tokens": rows, "total": total, "limit": limit, "offset": offset})
+
+
+@api_bp.route("/events")
+def events():
+    """Server-Sent Events stream for real-time dashboard updates.
+
+    Polls the database every 2 seconds and sends stats snapshots
+    to connected clients.
+    """
+    interval = request.args.get("interval", 2, type=int)
+    interval = max(1, min(interval, 30))
+
+    def generate():
+        last_stats = None
+        while True:
+            try:
+                stats_data = get_stats(_db_path())
+                # Only send when data changes
+                if stats_data != last_stats:
+                    yield f"data: {json.dumps(stats_data)}\n\n"
+                    last_stats = stats_data
+                else:
+                    yield ": heartbeat\n\n"
+            except Exception:
+                yield f"event: error\ndata: {{\"message\": \"Database read error\"}}\n\n"
+            time.sleep(interval)
+
+    return Response(generate(), mimetype="text/event-stream",
+                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
