@@ -25,7 +25,8 @@ export default async function SessionsPage({
 
   try {
     data = await getSessions({ limit, offset });
-  } catch {
+  } catch (err) {
+    console.error("Failed to fetch sessions:", err);
     apiError = true;
   }
 

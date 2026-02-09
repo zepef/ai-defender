@@ -24,7 +24,8 @@ export default async function OverviewPage() {
       getStats(),
       getSessions({ limit: 5 }),
     ]);
-  } catch {
+  } catch (err) {
+    console.error("Failed to fetch dashboard data:", err);
     apiError = true;
   }
 

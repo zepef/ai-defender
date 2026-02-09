@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 import uuid
 from dataclasses import dataclass, field
 from threading import Lock
@@ -55,20 +56,32 @@ class SessionManager:
     def __init__(self, config: Config) -> None:
         self.config = config
         self._cache: dict[str, SessionContext] = {}
+        self._cache_times: dict[str, float] = {}
         self._lock = Lock()
+
+    def _evict_stale(self) -> None:
+        """Remove cache entries older than session_ttl_seconds. Must hold _lock."""
+        cutoff = time.monotonic() - self.config.session_ttl_seconds
+        stale = [sid for sid, ts in self._cache_times.items() if ts < cutoff]
+        for sid in stale:
+            self._cache.pop(sid, None)
+            self._cache_times.pop(sid, None)
 
     def create(self, client_info: dict) -> str:
         session_id = uuid.uuid4().hex
         ctx = SessionContext(session_id=session_id, client_info=client_info)
 
         with self._lock:
+            self._evict_stale()
             self._cache[session_id] = ctx
+            self._cache_times[session_id] = time.monotonic()
 
         create_session(self.config.db_path, session_id, client_info)
         return session_id
 
     def get(self, session_id: str) -> SessionContext | None:
         with self._lock:
+            self._evict_stale()
             ctx = self._cache.get(session_id)
         if ctx is not None:
             return ctx
@@ -89,12 +102,18 @@ class SessionManager:
         )
         with self._lock:
             self._cache[session_id] = ctx
+            self._cache_times[session_id] = time.monotonic()
         return ctx
 
     def touch(self, session_id: str) -> None:
-        ctx = self.get(session_id)
+        with self._lock:
+            ctx = self._cache.get(session_id)
+        if ctx is None:
+            ctx = self.get(session_id)
         if ctx:
             ctx.interaction_count += 1
+            with self._lock:
+                self._cache_times[session_id] = time.monotonic()
 
     def persist(self, session_id: str) -> None:
         ctx = self.get(session_id)

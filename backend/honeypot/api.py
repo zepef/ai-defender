@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import secrets
+
 from flask import Blueprint, current_app, jsonify, request
 
 from shared.db import (
@@ -18,6 +20,26 @@ api_bp = Blueprint("api", __name__, url_prefix="/api")
 
 def _db_path() -> str:
     return current_app.config["HONEYPOT"].db_path
+
+
+@api_bp.before_request
+def _check_api_key():
+    if current_app.config.get("TESTING"):
+        return None
+
+    api_key = current_app.config["HONEYPOT"].dashboard_api_key
+    if not api_key:
+        return None
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return jsonify({"error": "Missing or invalid Authorization header"}), 401
+
+    provided = auth_header[7:]
+    if not secrets.compare_digest(provided, api_key):
+        return jsonify({"error": "Invalid API key"}), 401
+
+    return None
 
 
 @api_bp.route("/stats")

@@ -21,9 +21,6 @@ class TokenType(Enum):
 
 
 class HoneyTokenGenerator:
-    def __init__(self) -> None:
-        self._counter = 0
-
     def _session_hash(self, session_id: str) -> str:
         return hashlib.sha256(session_id.encode()).hexdigest()[:8]
 
@@ -32,7 +29,6 @@ class HoneyTokenGenerator:
         return "".join(secrets.choice(chars) for _ in range(length))
 
     def generate(self, token_type: TokenType, session_id: str) -> str:
-        self._counter += 1
         tag = self._session_hash(session_id)
 
         match token_type:

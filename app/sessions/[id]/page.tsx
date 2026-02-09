@@ -49,7 +49,8 @@ export default async function SessionDetailPage({
       getSessionInteractions(id),
       getSessionTokens(id),
     ]);
-  } catch {
+  } catch (err) {
+    console.error("Failed to fetch session detail:", err);
     notFound();
   }
 
