@@ -164,14 +164,18 @@ def log_honey_token(db_path: str, session_id: str, token_type: str,
 
 def get_stats(db_path: str) -> dict:
     with get_connection(db_path) as conn:
-        total_sessions = conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
-        active_sessions = conn.execute(
-            "SELECT COUNT(*) FROM sessions WHERE last_seen_at >= datetime('now', '-1 hour')"
-        ).fetchone()[0]
-        avg_row = conn.execute("SELECT AVG(escalation_level) FROM sessions").fetchone()
-        avg_escalation = round(avg_row[0], 2) if avg_row[0] is not None else 0
-        total_interactions = conn.execute("SELECT COUNT(*) FROM interactions").fetchone()[0]
-        total_tokens = conn.execute("SELECT COUNT(*) FROM honey_tokens").fetchone()[0]
+        # Batch scalar counters into a single query
+        summary = conn.execute(
+            """SELECT
+                (SELECT COUNT(*) FROM sessions) AS total_sessions,
+                (SELECT COUNT(*) FROM sessions
+                 WHERE last_seen_at >= datetime('now', '-1 hour')) AS active_sessions,
+                (SELECT AVG(escalation_level) FROM sessions) AS avg_escalation,
+                (SELECT COUNT(*) FROM interactions) AS total_interactions,
+                (SELECT COUNT(*) FROM honey_tokens) AS total_tokens"""
+        ).fetchone()
+        avg_esc = summary["avg_escalation"]
+        avg_escalation = round(avg_esc, 2) if avg_esc is not None else 0
 
         tool_usage = {}
         for row in conn.execute(
@@ -195,11 +199,11 @@ def get_stats(db_path: str) -> dict:
             escalation_distribution[str(row["escalation_level"])] = row["cnt"]
 
     return {
-        "total_sessions": total_sessions,
-        "active_sessions": active_sessions,
+        "total_sessions": summary["total_sessions"],
+        "active_sessions": summary["active_sessions"],
         "avg_escalation": avg_escalation,
-        "total_interactions": total_interactions,
-        "total_tokens": total_tokens,
+        "total_interactions": summary["total_interactions"],
+        "total_tokens": summary["total_tokens"],
         "tool_usage": tool_usage,
         "token_type_breakdown": token_type_breakdown,
         "escalation_distribution": escalation_distribution,

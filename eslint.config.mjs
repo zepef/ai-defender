@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Exclude Python virtual environment
+    "backend/.venv/**",
+    "backend/.coverage",
   ]),
 ]);
 

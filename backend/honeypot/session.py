@@ -133,8 +133,8 @@ class SessionManager:
         if ctx is None:
             ctx = self.get(session_id)
         if ctx:
-            ctx.interaction_count += 1
             with self._lock:
+                ctx.interaction_count += 1
                 self._cache_times[session_id] = time.monotonic()
 
     def persist(self, session_id: str) -> None:

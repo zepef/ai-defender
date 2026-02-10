@@ -41,8 +41,14 @@ def _validate_iso_date(value: str) -> bool:
     except (ValueError, TypeError):
         return False
 
-_sse_connections = 0
-_sse_lock = Lock()
+
+def _sse_state() -> dict:
+    """Return the per-app SSE connection state dict."""
+    state = current_app.config.get("SSE_STATE")
+    if state is None:
+        state = {"connections": 0, "lock": Lock()}
+        current_app.config["SSE_STATE"] = state
+    return state
 
 
 def _db_path() -> str:
@@ -71,7 +77,7 @@ def _check_dashboard_rate_limit():
 
 @api_bp.before_request
 def _check_api_key():
-    if current_app.config.get("TESTING"):
+    if current_app.config.get("TESTING") and not current_app.config["HONEYPOT"].dashboard_api_key:
         return None
 
     api_key = current_app.config["HONEYPOT"].dashboard_api_key
@@ -164,19 +170,19 @@ def events():
     Polls the database and sends stats snapshots to connected clients.
     Enforces a maximum connection count and connection lifetime.
     """
-    global _sse_connections
+    state = _sse_state()
+    lock = state["lock"]
 
-    with _sse_lock:
-        if _sse_connections >= SSE_MAX_CONNECTIONS:
+    with lock:
+        if state["connections"] >= SSE_MAX_CONNECTIONS:
             return jsonify({"error": "Too many SSE connections"}), 429
-        _sse_connections += 1
+        state["connections"] += 1
 
     interval = request.args.get("interval", 2, type=int)
     interval = max(2, min(interval, 30))
     db_path = _db_path()
 
     def generate():
-        global _sse_connections
         start = time.monotonic()
         last_stats = None
         try:
@@ -197,8 +203,8 @@ def events():
         except GeneratorExit:
             logger.debug("SSE: client disconnected")
         finally:
-            with _sse_lock:
-                _sse_connections -= 1
+            with lock:
+                state["connections"] -= 1
 
     return Response(generate(), mimetype="text/event-stream",
                     headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})

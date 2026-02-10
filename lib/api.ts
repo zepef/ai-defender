@@ -7,9 +7,14 @@ import type {
 } from "./types";
 
 const API_BASE = process.env.API_URL || "http://localhost:5000";
+const API_KEY = process.env.DASHBOARD_API_KEY || "";
 
 async function fetchApi<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, { cache: "no-store" });
+  const headers: Record<string, string> = {};
+  if (API_KEY) {
+    headers["Authorization"] = `Bearer ${API_KEY}`;
+  }
+  const res = await fetch(`${API_BASE}${path}`, { cache: "no-store", headers });
   if (!res.ok) {
     throw new Error(`API error: ${res.status} ${res.statusText}`);
   }

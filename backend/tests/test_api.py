@@ -170,18 +170,23 @@ class TestAllTokensEndpoint:
 class TestSSEEndpoint:
     """Tests for the GET /api/events Server-Sent Events endpoint."""
 
-    def test_sse_returns_event_stream(self, client, monkeypatch):
+    def _reset_sse(self, app):
+        """Reset SSE state to 0 connections before each SSE test."""
+        from threading import Lock
+        app.config["SSE_STATE"] = {"connections": 0, "lock": Lock()}
+
+    def test_sse_returns_event_stream(self, app, client, monkeypatch):
         """GET /api/events returns content-type text/event-stream."""
-        monkeypatch.setattr(_api_module, "_sse_connections", 0)
+        self._reset_sse(app)
         monkeypatch.setattr(_api_module, "SSE_MAX_DURATION", 0.001)
         with patch("honeypot.api.time.sleep"):
             resp = client.get("/api/events")
         assert resp.status_code == 200
         assert resp.content_type.startswith("text/event-stream")
 
-    def test_sse_returns_data(self, client, monkeypatch):
+    def test_sse_returns_data(self, app, client, monkeypatch):
         """Response body starts with 'data: ' and contains valid JSON."""
-        monkeypatch.setattr(_api_module, "_sse_connections", 0)
+        self._reset_sse(app)
         monkeypatch.setattr(_api_module, "SSE_MAX_DURATION", 0.001)
         with patch("honeypot.api.time.sleep"):
             resp = client.get("/api/events")
@@ -197,12 +202,12 @@ class TestSSEEndpoint:
         parsed = json.loads(first_payload)
         assert isinstance(parsed, dict)
 
-    def test_sse_interval_clamped(self, client, monkeypatch):
+    def test_sse_interval_clamped(self, app, client, monkeypatch):
         """The interval query parameter is clamped between 2 and 30."""
         monkeypatch.setattr(_api_module, "SSE_MAX_DURATION", 0.001)
 
         # interval=0 should be clamped UP to 2
-        monkeypatch.setattr(_api_module, "_sse_connections", 0)
+        self._reset_sse(app)
         with patch("honeypot.api.time.sleep") as mock_sleep:
             resp = client.get("/api/events?interval=0")
             resp.get_data()  # consume the generator fully
@@ -213,7 +218,7 @@ class TestSSEEndpoint:
         )
 
         # interval=999 should be clamped DOWN to 30
-        monkeypatch.setattr(_api_module, "_sse_connections", 0)
+        self._reset_sse(app)
         with patch("honeypot.api.time.sleep") as mock_sleep:
             resp = client.get("/api/events?interval=999")
             resp.get_data()  # consume the generator fully
@@ -223,10 +228,11 @@ class TestSSEEndpoint:
             f"interval=999 should clamp to 30, got {mock_sleep.call_args_list[0].args[0]}"
         )
 
-    def test_sse_connection_limit(self, client, monkeypatch):
+    def test_sse_connection_limit(self, app, client, monkeypatch):
         """When SSE_MAX_CONNECTIONS is reached, returns 429."""
+        from threading import Lock
         # Simulate that we already have the maximum number of connections
-        monkeypatch.setattr(_api_module, "_sse_connections", 10)
+        app.config["SSE_STATE"] = {"connections": 10, "lock": Lock()}
         monkeypatch.setattr(_api_module, "SSE_MAX_CONNECTIONS", 10)
 
         resp = client.get("/api/events")

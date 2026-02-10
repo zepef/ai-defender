@@ -24,7 +24,9 @@ def config(tmp_db):
 
 @pytest.fixture
 def session_manager(config):
-    return SessionManager(config)
+    mgr = SessionManager(config)
+    yield mgr
+    mgr.shutdown()
 
 
 @pytest.fixture
@@ -36,9 +38,13 @@ def registry(config, session_manager):
 
 @pytest.fixture
 def app(config):
-    app = create_app(config)
-    app.config["TESTING"] = True
-    return app
+    application = create_app(config)
+    application.config["TESTING"] = True
+    yield application
+    # Shut down the session manager created inside create_app
+    session_mgr = getattr(application, "_session_manager", None)
+    if session_mgr:
+        session_mgr.shutdown()
 
 
 @pytest.fixture

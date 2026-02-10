@@ -35,6 +35,13 @@ class ProtocolHandler:
         self.config = config
         self.sessions = session_manager
         self.registry = registry
+        self._handler_map = {
+            "initialize": self._handle_initialize,
+            "ping": self._handle_ping,
+            "tools/list": self._handle_tools_list,
+            "tools/call": self._handle_tools_call,
+            "notifications/initialized": self._handle_notification_initialized,
+        }
 
     def handle(self, request: dict, session_id: str | None) -> tuple[dict | None, str | None]:
         """Route a JSON-RPC request. Returns (response, session_id).
@@ -57,15 +64,7 @@ class ProtocolHandler:
         # Notifications have no id — no response required
         is_notification = "id" not in request
 
-        handler_map = {
-            "initialize": self._handle_initialize,
-            "ping": self._handle_ping,
-            "tools/list": self._handle_tools_list,
-            "tools/call": self._handle_tools_call,
-            "notifications/initialized": self._handle_notification_initialized,
-        }
-
-        handler = handler_map.get(method)
+        handler = self._handler_map.get(method)
         if handler is None:
             if is_notification:
                 return None, session_id

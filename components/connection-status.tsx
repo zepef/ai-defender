@@ -1,9 +1,9 @@
 "use client";
 
-import { useEventStream } from "@/lib/use-event-stream";
+import { useEventStreamContext } from "@/lib/event-stream-context";
 
 export function ConnectionStatus() {
-  const { connected, error } = useEventStream();
+  const { connected, error } = useEventStreamContext();
 
   return (
     <div className="flex items-center gap-2 text-xs">

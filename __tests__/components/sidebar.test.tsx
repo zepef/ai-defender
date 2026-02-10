@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 // Mock next/link to render a plain <a> tag
 vi.mock("next/link", () => ({
-  default: ({ children, ...props }: any) => <a {...props}>{children}</a>,
+  default: ({ children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...props}>{children}</a>,
 }));
 
 // Mock next/navigation with a controllable pathname

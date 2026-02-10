@@ -151,11 +151,9 @@ def test_concurrent_touch_same_session(session_manager, session_id):
         ]
         _collect_futures(futures)
 
-    # interaction_count is incremented outside the lock (ctx.interaction_count
-    # += 1 in touch()) so some updates may be lost under a data race.  The
-    # critical safety property is that no exception was raised and the counter
-    # was modified at least once without going negative or exceeding the total.
-    assert 1 <= ctx.interaction_count <= THREAD_COUNT
+    # interaction_count is now incremented under the lock, so all updates
+    # must be preserved.
+    assert ctx.interaction_count == THREAD_COUNT
 
 
 def test_concurrent_get_and_touch_interleaved(session_manager, session_id):
@@ -263,45 +261,48 @@ def test_eviction_during_concurrent_creates(config):
     mgr = SessionManager(short_ttl_config)
     non_sqlite_errors = []
 
-    def creator(idx):
-        try:
-            sid = _retry_on_locked(mgr.create, {"thread": idx})
-            # The session may or may not survive eviction, but operations
-            # must not raise.
-            mgr.get(sid)
-            mgr.touch(sid)
-        except sqlite3.OperationalError:
-            # SQLite contention is not what this test cares about.
-            pass
-        except Exception as exc:
-            non_sqlite_errors.append(exc)
+    try:
+        def creator(idx):
+            try:
+                sid = _retry_on_locked(mgr.create, {"thread": idx})
+                # The session may or may not survive eviction, but operations
+                # must not raise.
+                mgr.get(sid)
+                mgr.touch(sid)
+            except sqlite3.OperationalError:
+                # SQLite contention is not what this test cares about.
+                pass
+            except Exception as exc:
+                non_sqlite_errors.append(exc)
 
-    def evictor():
-        """Manually trigger eviction in a tight loop."""
-        for _ in range(50):
-            with mgr._lock:
-                mgr._evict_stale()
-            time.sleep(0.001)
+        def evictor():
+            """Manually trigger eviction in a tight loop."""
+            for _ in range(50):
+                with mgr._lock:
+                    mgr._evict_stale()
+                time.sleep(0.001)
 
-    eviction_thread = threading.Thread(target=evictor)
-    eviction_thread.start()
+        eviction_thread = threading.Thread(target=evictor)
+        eviction_thread.start()
 
-    with ThreadPoolExecutor(max_workers=THREAD_COUNT) as pool:
-        futures = [pool.submit(creator, i) for i in range(THREAD_COUNT)]
-        # We collect but do not re-raise because creators handle their own
-        # errors and append non-SQLite ones to non_sqlite_errors.
-        for future in as_completed(futures):
-            future.result()  # propagate unexpected exceptions from the pool
+        with ThreadPoolExecutor(max_workers=THREAD_COUNT) as pool:
+            futures = [pool.submit(creator, i) for i in range(THREAD_COUNT)]
+            # We collect but do not re-raise because creators handle their own
+            # errors and append non-SQLite ones to non_sqlite_errors.
+            for future in as_completed(futures):
+                future.result()  # propagate unexpected exceptions from the pool
 
-    eviction_thread.join(timeout=5)
+        eviction_thread.join(timeout=5)
 
-    assert not non_sqlite_errors, (
-        f"Non-SQLite errors during eviction + concurrent creates: "
-        f"{non_sqlite_errors}"
-    )
+        assert not non_sqlite_errors, (
+            f"Non-SQLite errors during eviction + concurrent creates: "
+            f"{non_sqlite_errors}"
+        )
 
-    # The cache dicts must remain in sync regardless of eviction.
-    _assert_cache_in_sync(mgr)
+        # The cache dicts must remain in sync regardless of eviction.
+        _assert_cache_in_sync(mgr)
+    finally:
+        mgr.shutdown()
 
 
 def test_eviction_preserves_active_sessions(config):
@@ -309,49 +310,52 @@ def test_eviction_preserves_active_sessions(config):
     stale sessions are removed, even under concurrent access."""
     short_ttl_config = type(config)(
         db_path=config.db_path,
-        session_ttl_seconds=2,
+        session_ttl_seconds=1,
     )
     mgr = SessionManager(short_ttl_config)
 
-    # Create an "old" batch of sessions.
-    old_sids = [mgr.create({"batch": "old", "i": i}) for i in range(5)]
+    try:
+        # Create an "old" batch of sessions.
+        old_sids = [mgr.create({"batch": "old", "i": i}) for i in range(5)]
 
-    # Wait so they become stale.
-    time.sleep(3)
+        # Wait so they become stale.
+        time.sleep(1.5)
 
-    # Create a "new" batch of sessions that should survive.
-    new_sids = [mgr.create({"batch": "new", "i": i}) for i in range(5)]
+        # Create a "new" batch of sessions that should survive.
+        new_sids = [mgr.create({"batch": "new", "i": i}) for i in range(5)]
 
-    # Run eviction concurrently with gets on the new sessions.
-    barrier = threading.Barrier(THREAD_COUNT)
+        # Run eviction concurrently with gets on the new sessions.
+        barrier = threading.Barrier(THREAD_COUNT)
 
-    def mixed_worker(idx):
-        barrier.wait()
-        if idx < 5:
-            # Trigger eviction via get (which calls _evict_stale).
-            mgr.get(new_sids[idx])
-        elif idx < 10:
-            mgr.touch(new_sids[idx - 5])
-        else:
-            with mgr._lock:
-                mgr._evict_stale()
+        def mixed_worker(idx):
+            barrier.wait()
+            if idx < 5:
+                # Trigger eviction via get (which calls _evict_stale).
+                mgr.get(new_sids[idx])
+            elif idx < 10:
+                mgr.touch(new_sids[idx - 5])
+            else:
+                with mgr._lock:
+                    mgr._evict_stale()
 
-    with ThreadPoolExecutor(max_workers=THREAD_COUNT) as pool:
-        futures = [pool.submit(mixed_worker, i) for i in range(THREAD_COUNT)]
-        _collect_futures(futures)
+        with ThreadPoolExecutor(max_workers=THREAD_COUNT) as pool:
+            futures = [pool.submit(mixed_worker, i) for i in range(THREAD_COUNT)]
+            _collect_futures(futures)
 
-    # New sessions must survive in cache or at least be reloadable from DB.
-    for sid in new_sids:
-        ctx = mgr.get(sid)
-        assert ctx is not None, f"Fresh session {sid} was incorrectly evicted"
+        # New sessions must survive in cache or at least be reloadable from DB.
+        for sid in new_sids:
+            ctx = mgr.get(sid)
+            assert ctx is not None, f"Fresh session {sid} was incorrectly evicted"
 
-    # Old sessions should have been evicted from the cache (but may still
-    # be loadable from SQLite via get()).
-    with mgr._lock:
-        for sid in old_sids:
-            assert sid not in mgr._cache, (
-                f"Stale session {sid} was not evicted from cache"
-            )
+        # Old sessions should have been evicted from the cache (but may still
+        # be loadable from SQLite via get()).
+        with mgr._lock:
+            for sid in old_sids:
+                assert sid not in mgr._cache, (
+                    f"Stale session {sid} was not evicted from cache"
+                )
+    finally:
+        mgr.shutdown()
 
 
 def test_eviction_loop_thread_is_daemon(session_manager):

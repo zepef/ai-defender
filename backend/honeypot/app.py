@@ -71,6 +71,7 @@ def create_app(config: Config | None = None) -> Flask:
     session_manager = SessionManager(config)
     registry = ToolRegistry(config, session_manager)
     protocol = ProtocolHandler(config, session_manager, registry)
+    app._session_manager = session_manager  # type: ignore[attr-defined]
 
     # Register all built-in simulators
     registry.register_defaults()
