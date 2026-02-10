@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSession, getSessionInteractions, getSessionTokens } from "@/lib/api";
 import { truncate, duration } from "@/lib/utils";
+import { MaskedValue } from "@/components/masked-value";
 import { StatCard } from "@/components/stat-card";
 import { EscalationBadge } from "@/components/escalation-badge";
 import { TokenTypeBadge } from "@/components/token-type-badge";
@@ -135,7 +136,7 @@ export default async function SessionDetailPage({
               </ScrollArea>
               <div className="flex items-center justify-between mt-3">
                 <p className="text-sm text-muted-foreground">
-                  Showing {timelineOffset + 1}-{Math.min(timelineOffset + TIMELINE_PAGE_SIZE, interactionTotal)} of{" "}
+                  Showing {interactionTotal > 0 ? timelineOffset + 1 : 0}-{Math.min(timelineOffset + TIMELINE_PAGE_SIZE, interactionTotal)} of{" "}
                   {interactionTotal} interactions
                 </p>
                 <div className="flex gap-2">
@@ -180,11 +181,8 @@ export default async function SessionDetailPage({
                     <TableCell>
                       <TokenTypeBadge type={t.token_type} />
                     </TableCell>
-                    <TableCell
-                      className="max-w-[250px] truncate font-mono text-sm text-muted-foreground"
-                      title={t.token_value}
-                    >
-                      {t.token_value}
+                    <TableCell className="max-w-[250px] font-mono text-sm text-muted-foreground">
+                      <MaskedValue value={t.token_value} />
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {t.context}

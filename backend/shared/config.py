@@ -50,4 +50,10 @@ class Config:
 
 
 def load_config() -> Config:
-    return Config()
+    config = Config()
+    if not config.dashboard_api_key:
+        logger.warning(
+            "DASHBOARD_API_KEY is not set — dashboard API authentication is disabled. "
+            "Set the DASHBOARD_API_KEY environment variable in production."
+        )
+    return config

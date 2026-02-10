@@ -7,7 +7,6 @@ and a health check at GET /health.
 from __future__ import annotations
 
 import logging
-import re
 import time
 from collections import defaultdict
 from threading import Lock
@@ -19,27 +18,39 @@ from honeypot.registry import ToolRegistry
 from honeypot.session import SessionManager
 from shared.config import Config, load_config
 from shared.db import init_db
+from shared.validators import SESSION_ID_RE
 
 logger = logging.getLogger(__name__)
 
-_SESSION_ID_RE = re.compile(r"^[0-9a-f]{32}$")
+DASHBOARD_RATE_LIMIT = 120
+DASHBOARD_RATE_WINDOW = 60
 
 
 class RateLimiter:
-    """Per-session sliding window rate limiter."""
+    """Per-session sliding window rate limiter with periodic cleanup."""
+
+    _CLEANUP_EVERY = 500  # full cleanup every N calls
 
     def __init__(self, max_calls: int, window_seconds: int) -> None:
         self.max_calls = max_calls
         self.window = window_seconds
         self._calls: dict[str, list[float]] = defaultdict(list)
         self._lock = Lock()
+        self._call_count = 0
 
     def is_allowed(self, key: str) -> bool:
         now = time.monotonic()
         cutoff = now - self.window
         with self._lock:
+            self._call_count += 1
+            # Periodic full cleanup of abandoned keys
+            if self._call_count % self._CLEANUP_EVERY == 0:
+                stale = [k for k, ts in self._calls.items()
+                         if not any(t > cutoff for t in ts)]
+                for k in stale:
+                    del self._calls[k]
             timestamps = self._calls[key]
-            # Prune old entries
+            # Prune old entries for current key
             self._calls[key] = [t for t in timestamps if t > cutoff]
             if len(self._calls[key]) >= self.max_calls:
                 return False
@@ -53,6 +64,7 @@ def create_app(config: Config | None = None) -> Flask:
 
     app = Flask(__name__)
     app.config["HONEYPOT"] = config
+    app.config["MAX_CONTENT_LENGTH"] = 1 * 1024 * 1024  # 1 MB request body limit
 
     init_db(config.db_path)
 
@@ -65,14 +77,14 @@ def create_app(config: Config | None = None) -> Flask:
 
     rate_limiter = RateLimiter(config.mcp_rate_limit, config.mcp_rate_window)
 
-    dashboard_rate_limiter = RateLimiter(max_calls=120, window_seconds=60)
+    dashboard_rate_limiter = RateLimiter(max_calls=DASHBOARD_RATE_LIMIT, window_seconds=DASHBOARD_RATE_WINDOW)
     app.config["DASHBOARD_RATE_LIMITER"] = dashboard_rate_limiter
 
     from honeypot.api import api_bp
     app.register_blueprint(api_bp)
 
     @app.after_request
-    def _set_security_headers(response):
+    def _set_security_headers(response):  # type: ignore[no-untyped-def]
         origin = request.headers.get("Origin", "")
         allowed = config.cors_origin
         if origin == allowed:
@@ -103,7 +115,7 @@ def create_app(config: Config | None = None) -> Flask:
             return jsonify({"jsonrpc": "2.0", "id": None, "error": err}), 400
 
         session_id = request.headers.get("Mcp-Session-Id")
-        if session_id and not _SESSION_ID_RE.match(session_id):
+        if session_id and not SESSION_ID_RE.match(session_id):
             err = {"code": -32600, "message": "Invalid session ID format"}
             return jsonify({"jsonrpc": "2.0", "id": body.get("id"), "error": err}), 400
 

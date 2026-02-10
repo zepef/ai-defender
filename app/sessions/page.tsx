@@ -97,7 +97,7 @@ export default async function SessionsPage({
 
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
-              Showing {offset + 1}-{Math.min(offset + limit, data.total)} of{" "}
+              Showing {data.total > 0 ? offset + 1 : 0}-{Math.min(offset + limit, data.total)} of{" "}
               {data.total}
             </p>
             <div className="flex gap-2">

@@ -6,7 +6,7 @@ import logging
 import time
 import uuid
 from dataclasses import dataclass, field
-from threading import Lock, Thread
+from threading import Event, Lock, Thread
 
 from shared.config import Config
 from shared.db import create_session, get_session, update_session
@@ -63,6 +63,7 @@ class SessionManager:
         self._cache: dict[str, SessionContext] = {}
         self._cache_times: dict[str, float] = {}
         self._lock = Lock()
+        self._stop_event = Event()
         self._eviction_thread = Thread(target=self._eviction_loop, daemon=True)
         self._eviction_thread.start()
 
@@ -78,17 +79,23 @@ class SessionManager:
 
     def _eviction_loop(self) -> None:
         """Background loop that periodically evicts stale cache entries."""
-        while True:
-            time.sleep(self._EVICTION_INTERVAL)
+        while not self._stop_event.is_set():
+            self._stop_event.wait(self._EVICTION_INTERVAL)
+            if self._stop_event.is_set():
+                break
             with self._lock:
                 self._evict_stale()
+
+    def shutdown(self) -> None:
+        """Signal the eviction thread to stop and wait for it."""
+        self._stop_event.set()
+        self._eviction_thread.join(timeout=5)
 
     def create(self, client_info: dict) -> str:
         session_id = uuid.uuid4().hex
         ctx = SessionContext(session_id=session_id, client_info=client_info)
 
         with self._lock:
-            self._evict_stale()
             self._cache[session_id] = ctx
             self._cache_times[session_id] = time.monotonic()
 
@@ -97,7 +104,6 @@ class SessionManager:
 
     def get(self, session_id: str) -> SessionContext | None:
         with self._lock:
-            self._evict_stale()
             ctx = self._cache.get(session_id)
         if ctx is not None:
             return ctx

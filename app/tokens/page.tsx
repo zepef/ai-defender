@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getTokens } from "@/lib/api";
+import { MaskedValue } from "@/components/masked-value";
 import { TokenTypeBadge } from "@/components/token-type-badge";
 import { RelativeTime } from "@/components/relative-time";
 import {
@@ -70,11 +71,8 @@ export default async function TokensPage({
                   <TableCell>
                     <TokenTypeBadge type={t.token_type} />
                   </TableCell>
-                  <TableCell
-                    className="max-w-[200px] truncate font-mono text-sm text-muted-foreground"
-                    title={t.token_value}
-                  >
-                    {t.token_value}
+                  <TableCell className="max-w-[200px] font-mono text-sm text-muted-foreground">
+                    <MaskedValue value={t.token_value} />
                   </TableCell>
                   <TableCell className="max-w-[200px] truncate text-sm text-muted-foreground">
                     {t.context}
@@ -99,7 +97,7 @@ export default async function TokensPage({
 
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
-              Showing {offset + 1}-{Math.min(offset + limit, data.total)} of{" "}
+              Showing {data.total > 0 ? offset + 1 : 0}-{Math.min(offset + limit, data.total)} of{" "}
               {data.total}
             </p>
             <div className="flex gap-2">

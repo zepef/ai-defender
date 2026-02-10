@@ -227,13 +227,10 @@ def get_all_sessions(db_path: str, escalation_level: int | None = None,
         rows = conn.execute(
             f"""SELECT s.id, s.client_info, s.started_at, s.last_seen_at,
                        s.escalation_level,
-                       COUNT(DISTINCT i.id) as interaction_count,
-                       COUNT(DISTINCT h.id) as token_count
+                       (SELECT COUNT(*) FROM interactions i WHERE i.session_id = s.id) as interaction_count,
+                       (SELECT COUNT(*) FROM honey_tokens h WHERE h.session_id = s.id) as token_count
                 FROM sessions s
-                LEFT JOIN interactions i ON i.session_id = s.id
-                LEFT JOIN honey_tokens h ON h.session_id = s.id
                 {where_clause}
-                GROUP BY s.id
                 ORDER BY s.started_at DESC
                 LIMIT ? OFFSET ?""",
             params + [limit, offset],
@@ -281,6 +278,24 @@ def get_session_tokens(db_path: str, session_id: str) -> list[dict]:
             (session_id,),
         ).fetchall()
     return [dict(row) for row in rows]
+
+
+def get_session_interaction_count(db_path: str, session_id: str) -> int:
+    """Return the number of interactions for a session without fetching rows."""
+    with get_connection(db_path) as conn:
+        return conn.execute(
+            "SELECT COUNT(*) FROM interactions WHERE session_id = ?",
+            (session_id,),
+        ).fetchone()[0]
+
+
+def get_session_token_count(db_path: str, session_id: str) -> int:
+    """Return the number of honey tokens for a session without fetching rows."""
+    with get_connection(db_path) as conn:
+        return conn.execute(
+            "SELECT COUNT(*) FROM honey_tokens WHERE session_id = ?",
+            (session_id,),
+        ).fetchone()[0]
 
 
 def purge_old_tokens(db_path: str, older_than_days: int = 90) -> int:

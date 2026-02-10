@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import secrets
 import time
 from datetime import datetime
@@ -16,10 +15,13 @@ from shared.db import (
     get_all_sessions,
     get_all_tokens,
     get_session,
+    get_session_interaction_count,
     get_session_interactions,
+    get_session_token_count,
     get_session_tokens,
     get_stats,
 )
+from shared.validators import validate_session_id
 
 logger = logging.getLogger(__name__)
 
@@ -30,8 +32,6 @@ MAX_LIMIT = 200
 SSE_MAX_CONNECTIONS = 10
 SSE_MAX_DURATION = 300  # 5 minutes
 
-_SESSION_ID_RE = re.compile(r"^[0-9a-f]{32}$")
-
 
 def _validate_iso_date(value: str) -> bool:
     """Return True if value is a valid ISO 8601 datetime string."""
@@ -40,13 +40,6 @@ def _validate_iso_date(value: str) -> bool:
         return True
     except (ValueError, TypeError):
         return False
-
-
-def _validate_session_id_param(session_id: str) -> str | None:
-    """Return an error message if session_id is invalid, else None."""
-    if not _SESSION_ID_RE.match(session_id):
-        return "Invalid session ID format"
-    return None
 
 _sse_connections = 0
 _sse_lock = Lock()
@@ -57,6 +50,7 @@ def _db_path() -> str:
 
 
 def _clamp_pagination() -> tuple[int, int]:
+    """Extract and clamp limit/offset query params within safe bounds."""
     limit = request.args.get("limit", 50, type=int)
     offset = request.args.get("offset", 0, type=int)
     limit = max(1, min(limit, MAX_LIMIT))
@@ -117,22 +111,20 @@ def sessions():
 
 @api_bp.route("/sessions/<session_id>")
 def session_detail(session_id: str):
-    err = _validate_session_id_param(session_id)
+    err = validate_session_id(session_id)
     if err:
         return jsonify({"error": err}), 400
     session = get_session(_db_path(), session_id)
     if session is None:
         return jsonify({"error": "Session not found"}), 404
-    interactions, interaction_count = get_session_interactions(_db_path(), session_id, limit=0)
-    tokens = get_session_tokens(_db_path(), session_id)
-    session["interaction_count"] = interaction_count
-    session["token_count"] = len(tokens)
+    session["interaction_count"] = get_session_interaction_count(_db_path(), session_id)
+    session["token_count"] = get_session_token_count(_db_path(), session_id)
     return jsonify(session)
 
 
 @api_bp.route("/sessions/<session_id>/interactions")
 def session_interactions(session_id: str):
-    err = _validate_session_id_param(session_id)
+    err = validate_session_id(session_id)
     if err:
         return jsonify({"error": err}), 400
     session = get_session(_db_path(), session_id)
@@ -145,7 +137,7 @@ def session_interactions(session_id: str):
 
 @api_bp.route("/sessions/<session_id>/tokens")
 def session_tokens(session_id: str):
-    err = _validate_session_id_param(session_id)
+    err = validate_session_id(session_id)
     if err:
         return jsonify({"error": err}), 400
     session = get_session(_db_path(), session_id)

@@ -7,7 +7,7 @@ handler: initialize, ping, tools/list, tools/call, notifications/initialized.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from honeypot.registry import ToolRegistry
@@ -18,11 +18,11 @@ from shared.config import Config
 logger = logging.getLogger(__name__)
 
 
-def jsonrpc_response(id: Any, result: dict) -> dict:
+def jsonrpc_response(id: object, result: dict) -> dict:
     return {"jsonrpc": "2.0", "id": id, "result": result}
 
 
-def jsonrpc_error(id: Any, code: int, message: str, data: Any = None) -> dict:
+def jsonrpc_error(id: object, code: int, message: str, data: object = None) -> dict:
     error = {"code": code, "message": message}
     if data is not None:
         error["data"] = data

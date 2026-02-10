@@ -11,6 +11,18 @@ import random
 
 from honeypot.session import SessionContext
 
+# Escalation scoring thresholds
+_MIN_HOSTS_FOR_ESCALATION = 2
+_MIN_FILES_FOR_ESCALATION = 2
+_MIN_CREDENTIALS_FOR_ESCALATION = 1
+_MIN_INTERACTIONS_FOR_ESCALATION = 10
+_MAX_ESCALATION_LEVEL = 3
+
+# Engagement injection thresholds
+_ERROR_INJECTION_MIN_INTERACTIONS = 5
+_ERROR_INJECTION_PROBABILITY = 0.10
+_BREADCRUMB_INJECTION_PROBABILITY = 0.3
+
 BREADCRUMBS_BY_LEVEL = {
     0: [
         "Hint: Internal network range is 10.0.0.0/16",
@@ -47,39 +59,43 @@ TRANSIENT_ERRORS = [
 
 class EngagementEngine:
     def compute_escalation(self, session: SessionContext) -> int:
+        """Compute escalation level (0-3) from session discovery state."""
         score = 0
-        if len(session.discovered_hosts) >= 2:
+        if len(session.discovered_hosts) >= _MIN_HOSTS_FOR_ESCALATION:
             score += 1
-        if len(session.discovered_files) >= 2:
+        if len(session.discovered_files) >= _MIN_FILES_FOR_ESCALATION:
             score += 1
-        if len(session.discovered_credentials) >= 1:
+        if len(session.discovered_credentials) >= _MIN_CREDENTIALS_FOR_ESCALATION:
             score += 1
-        if session.interaction_count >= 10:
+        if session.interaction_count >= _MIN_INTERACTIONS_FOR_ESCALATION:
             score += 1
-        return min(3, score)
+        return min(_MAX_ESCALATION_LEVEL, score)
 
     def get_breadcrumb(self, session: SessionContext) -> str | None:
-        level = min(session.escalation_level, 3)
+        """Select a random breadcrumb appropriate for the session's escalation level."""
+        level = min(session.escalation_level, _MAX_ESCALATION_LEVEL)
         crumbs = BREADCRUMBS_BY_LEVEL.get(level, [])
         if not crumbs:
             return None
         return random.choice(crumbs)
 
     def should_inject_error(self, session: SessionContext) -> bool:
-        if session.interaction_count < 5:
+        """Determine whether to inject a transient error for realism."""
+        if session.interaction_count < _ERROR_INJECTION_MIN_INTERACTIONS:
             return False
-        return random.random() < 0.10
+        return random.random() < _ERROR_INJECTION_PROBABILITY
 
     def get_transient_error(self) -> str:
+        """Return a random transient error message."""
         return random.choice(TRANSIENT_ERRORS)
 
     def enrich_output(self, output: str, session: SessionContext) -> str:
-        """Optionally append a breadcrumb to tool output."""
+        """Optionally append a breadcrumb or inject a transient error into tool output."""
         if self.should_inject_error(session):
             return self.get_transient_error() + "\n\n" + output
 
         breadcrumb = self.get_breadcrumb(session)
-        if breadcrumb and random.random() < 0.3:
+        if breadcrumb and random.random() < _BREADCRUMB_INJECTION_PROBABILITY:
             return output + f"\n\n# {breadcrumb}"
 
         return output

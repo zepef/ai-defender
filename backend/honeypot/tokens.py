@@ -20,12 +20,18 @@ class TokenType(Enum):
     SSH_KEY = "ssh_key"
 
 
+_SESSION_HASH_LENGTH = 8
+_DEFAULT_CHARSET = string.ascii_letters + string.digits
+
+
 class HoneyTokenGenerator:
+    """Generates fake credentials with embedded session traceability tags."""
+
     def _session_hash(self, session_id: str) -> str:
-        return hashlib.sha256(session_id.encode()).hexdigest()[:8]
+        return hashlib.sha256(session_id.encode()).hexdigest()[:_SESSION_HASH_LENGTH]
 
     def _random_string(self, length: int, charset: str | None = None) -> str:
-        chars = charset or (string.ascii_letters + string.digits)
+        chars = charset or _DEFAULT_CHARSET
         return "".join(secrets.choice(chars) for _ in range(length))
 
     def generate(self, token_type: TokenType, session_id: str) -> str:

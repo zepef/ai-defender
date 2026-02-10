@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getStats, getSessions } from "@/lib/api";
 import { StatCard } from "@/components/stat-card";
 import { BarIndicator } from "@/components/bar-indicator";
+import { ConnectionStatus } from "@/components/connection-status";
 import { EscalationBadge } from "@/components/escalation-badge";
 import { RelativeTime } from "@/components/relative-time";
 import {
@@ -49,7 +50,10 @@ export default async function OverviewPage() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold">Overview</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold">Overview</h2>
+        <ConnectionStatus />
+      </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard title="Total Sessions" value={stats.total_sessions} />
