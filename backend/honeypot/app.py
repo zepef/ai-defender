@@ -6,7 +6,9 @@ and a health check at GET /health.
 
 from __future__ import annotations
 
+import atexit
 import logging
+import signal
 import time
 from collections import defaultdict
 from threading import Lock
@@ -72,6 +74,12 @@ def create_app(config: Config | None = None) -> Flask:
     registry = ToolRegistry(config, session_manager)
     protocol = ProtocolHandler(config, session_manager, registry)
     app._session_manager = session_manager  # type: ignore[attr-defined]
+
+    def _shutdown_handler(signum, frame):  # type: ignore[no-untyped-def]
+        session_manager.shutdown()
+
+    signal.signal(signal.SIGTERM, _shutdown_handler)
+    atexit.register(session_manager.shutdown)
 
     # Register all built-in simulators
     registry.register_defaults()

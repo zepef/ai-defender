@@ -1,0 +1,10 @@
+backend/
+node_modules/
+.next/
+.git/
+.gitignore
+*.md
+CLAUDE.md
+.serena/
+.pytest_cache/
+__pycache__
