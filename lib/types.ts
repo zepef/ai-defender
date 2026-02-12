@@ -53,3 +53,30 @@ export interface DashboardStats {
   token_type_breakdown: Record<string, number>;
   escalation_distribution: Record<string, number>;
 }
+
+export interface InteractionEvent {
+  session_id: string;
+  tool_name: string;
+  escalation_delta: number;
+  escalation_level: number;
+  timestamp: string;
+}
+
+export interface SessionNewEvent {
+  session_id: string;
+  client_info: Record<string, string>;
+  escalation_level: number;
+  timestamp: string;
+}
+
+export interface SessionUpdateEvent {
+  session_id: string;
+  escalation_level: number;
+  interaction_count: number;
+}
+
+export type LiveEvent =
+  | { type: "interaction"; data: InteractionEvent }
+  | { type: "session_new"; data: SessionNewEvent }
+  | { type: "session_update"; data: SessionUpdateEvent }
+  | { type: "stats"; data: DashboardStats };

@@ -6,10 +6,15 @@ import logging
 import time
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from threading import Event, Lock, Thread
+from typing import TYPE_CHECKING
 
 from shared.config import Config
 from shared.db import create_session, get_session, update_session
+
+if TYPE_CHECKING:
+    from shared.event_bus import EventBus
 
 logger = logging.getLogger(__name__)
 
@@ -58,8 +63,9 @@ class SessionContext:
 class SessionManager:
     _EVICTION_INTERVAL = 60  # seconds between background eviction runs
 
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config: Config, *, event_bus: EventBus | None = None) -> None:
         self.config = config
+        self.event_bus = event_bus
         self._cache: dict[str, SessionContext] = {}
         self._cache_times: dict[str, float] = {}
         self._lock = Lock()
@@ -100,6 +106,15 @@ class SessionManager:
             self._cache_times[session_id] = time.monotonic()
 
         create_session(self.config.db_path, session_id, client_info)
+
+        if self.event_bus:
+            self.event_bus.publish("session_new", {
+                "session_id": session_id,
+                "client_info": client_info,
+                "escalation_level": 0,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+
         return session_id
 
     def get(self, session_id: str) -> SessionContext | None:

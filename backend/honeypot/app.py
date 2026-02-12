@@ -20,6 +20,7 @@ from honeypot.registry import ToolRegistry
 from honeypot.session import SessionManager
 from shared.config import Config, load_config
 from shared.db import init_db
+from shared.event_bus import EventBus
 from shared.validators import SESSION_ID_RE
 
 logger = logging.getLogger(__name__)
@@ -70,8 +71,11 @@ def create_app(config: Config | None = None) -> Flask:
 
     init_db(config.db_path)
 
-    session_manager = SessionManager(config)
-    registry = ToolRegistry(config, session_manager)
+    event_bus = EventBus()
+    app.config["EVENT_BUS"] = event_bus
+
+    session_manager = SessionManager(config, event_bus=event_bus)
+    registry = ToolRegistry(config, session_manager, event_bus=event_bus)
     protocol = ProtocolHandler(config, session_manager, registry)
     app._session_manager = session_manager  # type: ignore[attr-defined]
 

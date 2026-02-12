@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from honeypot.engagement import EngagementEngine
@@ -12,14 +13,16 @@ from shared.db import log_interaction
 
 if TYPE_CHECKING:
     from honeypot.session import SessionManager
+    from shared.event_bus import EventBus
 
 logger = logging.getLogger(__name__)
 
 
 class ToolRegistry:
-    def __init__(self, config: Config, session_manager: SessionManager) -> None:
+    def __init__(self, config: Config, session_manager: SessionManager, *, event_bus: EventBus | None = None) -> None:
         self.config = config
         self.sessions = session_manager
+        self.event_bus = event_bus
         self._tools: dict[str, ToolSimulator] = {}
         self.engagement = EngagementEngine()
 
@@ -61,9 +64,24 @@ class ToolRegistry:
             escalation_delta=result.escalation_delta,
         )
 
+        if self.event_bus:
+            self.event_bus.publish("interaction", {
+                "session_id": session_id,
+                "tool_name": tool_name,
+                "escalation_delta": result.escalation_delta,
+                "escalation_level": session.escalation_level,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+
         # Apply escalation
         if result.escalation_delta > 0:
             session.escalate(result.escalation_delta)
+            if self.event_bus:
+                self.event_bus.publish("session_update", {
+                    "session_id": session_id,
+                    "escalation_level": session.escalation_level,
+                    "interaction_count": session.interaction_count,
+                })
 
         # Persist session state
         self.sessions.persist(session_id)

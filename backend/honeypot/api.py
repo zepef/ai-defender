@@ -163,6 +163,74 @@ def tokens():
     return jsonify({"tokens": rows, "total": total, "limit": limit, "offset": offset})
 
 
+@api_bp.route("/events/live")
+def events_live():
+    """Server-Sent Events stream with typed per-interaction events.
+
+    Uses the in-process EventBus for low-latency push notifications.
+    Supports Last-Event-ID for reconnection catch-up.
+    """
+    from shared.event_bus import EventBus
+
+    bus: EventBus | None = current_app.config.get("EVENT_BUS")
+    if bus is None:
+        return jsonify({"error": "Event bus not available"}), 503
+
+    state = _sse_state()
+    lock = state["lock"]
+
+    with lock:
+        if state["connections"] >= SSE_MAX_CONNECTIONS:
+            return jsonify({"error": "Too many SSE connections"}), 429
+        state["connections"] += 1
+
+    last_event_id = request.headers.get("Last-Event-ID", "0")
+    try:
+        last_id = int(last_event_id)
+    except (ValueError, TypeError):
+        last_id = 0
+
+    db_path = _db_path()
+    notify, current_id = bus.subscribe()
+    if last_id < current_id:
+        last_id = max(last_id, 0)
+
+    def generate():
+        nonlocal last_id
+        start = time.monotonic()
+        try:
+            # Send initial stats
+            try:
+                stats_data = get_stats(db_path)
+                yield f"event: stats\ndata: {json.dumps(stats_data)}\n\n"
+            except Exception:
+                logger.exception("SSE live: initial stats error")
+
+            while time.monotonic() - start < SSE_MAX_DURATION:
+                notify.wait(timeout=1.0)
+                notify.clear()
+
+                events = bus.events_since(last_id)
+                for evt in events:
+                    payload = json.dumps(evt.data)
+                    yield f"id: {evt.id}\nevent: {evt.event_type}\ndata: {payload}\n\n"
+                    last_id = evt.id
+
+                if not events:
+                    yield ": heartbeat\n\n"
+
+            yield f"event: reconnect\ndata: {{\"reason\": \"max duration reached\"}}\n\n"
+        except GeneratorExit:
+            logger.debug("SSE live: client disconnected")
+        finally:
+            bus.unsubscribe(notify)
+            with lock:
+                state["connections"] -= 1
+
+    return Response(generate(), mimetype="text/event-stream",
+                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
 @api_bp.route("/events")
 def events():
     """Server-Sent Events stream for real-time dashboard updates.
