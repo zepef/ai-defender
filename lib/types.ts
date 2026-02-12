@@ -60,6 +60,8 @@ export interface InteractionEvent {
   escalation_delta: number;
   escalation_level: number;
   timestamp: string;
+  prompt_summary?: string;
+  injection?: string;
 }
 
 export interface SessionNewEvent {

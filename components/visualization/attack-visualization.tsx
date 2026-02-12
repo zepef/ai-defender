@@ -14,6 +14,7 @@ import { StatsOverlay } from "./overlays/stats-overlay";
 import { EventFeedOverlay } from "./overlays/event-feed-overlay";
 import { SessionDetailPanel } from "./overlays/session-detail-panel";
 import { SessionsListOverlay } from "./overlays/sessions-list-overlay";
+import { PromptMonitorOverlay } from "./overlays/prompt-monitor-overlay";
 import { useTTSAnnouncer } from "@/lib/use-tts-announcer";
 
 // --- State management ---
@@ -200,6 +201,8 @@ export function AttackVisualization() {
           onSelect={handleSelect}
         />
       )}
+
+      <PromptMonitorOverlay />
 
       {/* Floating nav button */}
       <NavButton />

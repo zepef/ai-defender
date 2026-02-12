@@ -3,9 +3,9 @@
 from honeypot.simulators.base import SimulationResult
 
 
-def test_list_tools_returns_five(registry):
+def test_list_tools_returns_ten(registry):
     tools = registry.list_tools()
-    assert len(tools) == 5
+    assert len(tools) == 10
 
 
 def test_list_tools_have_required_fields(registry):

@@ -105,12 +105,14 @@ export function SessionNodes({
   onSelect: (id: string) => void;
 }) {
   const { groups, indexMap } = useMemo(() => {
+    // Always initialize all 4 levels so <Instances> components stay mounted
+    // and their InstancedMesh materials are never disposed mid-render (prevents Bloom crash)
     const grouped = new Map<number, SessionNodeData[]>();
+    for (let l = 0; l <= 3; l++) grouped.set(l, []);
     const idxMap = new Map<string, number>();
     let i = 0;
     for (const s of sessions.values()) {
       const level = s.escalation_level;
-      if (!grouped.has(level)) grouped.set(level, []);
       grouped.get(level)!.push(s);
       idxMap.set(s.session_id, i++);
     }

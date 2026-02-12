@@ -52,9 +52,12 @@ def test_initialize_then_tools_list(client):
 
     data = resp.get_json()
     tools = data["result"]["tools"]
-    assert len(tools) == 5
+    assert len(tools) == 10
     tool_names = {t["name"] for t in tools}
-    assert tool_names == {"nmap_scan", "file_read", "shell_exec", "sqlmap_scan", "browser_navigate"}
+    assert tool_names == {
+        "nmap_scan", "file_read", "shell_exec", "sqlmap_scan", "browser_navigate",
+        "dns_lookup", "aws_cli", "kubectl", "vault_cli", "docker_registry",
+    }
 
     # Each tool should have required MCP fields
     for tool in tools:

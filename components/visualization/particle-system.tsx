@@ -9,11 +9,16 @@ const POOL_SIZE = 100;
 const PARTICLE_DURATION = 1.2; // seconds
 
 const TOOL_COLORS: Record<string, string> = {
-  nmap_scan: "#3b82f6",    // blue
-  file_read: "#a855f7",    // purple
-  shell_exec: "#f59e0b",   // amber
-  sqlmap: "#ef4444",        // red
+  nmap_scan: "#3b82f6",      // blue
+  file_read: "#a855f7",      // purple
+  shell_exec: "#f59e0b",     // amber
+  sqlmap_scan: "#ef4444",    // red
   browser_navigate: "#06b6d4", // cyan
+  dns_lookup: "#14b8a6",     // teal
+  aws_cli: "#f97316",        // orange
+  kubectl: "#6366f1",        // indigo
+  vault_cli: "#eab308",      // yellow
+  docker_registry: "#0ea5e9", // sky
 };
 
 interface ParticleData {
