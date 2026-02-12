@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from honeypot.engagement import EngagementEngine
 from honeypot.simulators.base import SimulationResult, ToolSimulator
 from shared.config import Config
-from shared.db import log_interaction
+from shared.db import get_session_token_count, log_interaction
 
 if TYPE_CHECKING:
     from honeypot.session import SessionManager
@@ -45,7 +45,9 @@ class ToolRegistry:
         if session is None:
             return SimulationResult(output="Error: invalid session", is_error=True)
 
+        tokens_before = get_session_token_count(self.config.db_path, session_id)
         result = simulator.simulate(arguments, session)
+        tokens_after = get_session_token_count(self.config.db_path, session_id)
 
         # Apply engagement engine enrichment
         computed_level = self.engagement.compute_escalation(session)
@@ -70,6 +72,17 @@ class ToolRegistry:
                 "tool_name": tool_name,
                 "escalation_delta": result.escalation_delta,
                 "escalation_level": session.escalation_level,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+
+        # Emit token_deployed events for defensive actions
+        tokens_deployed = tokens_after - tokens_before
+        if tokens_deployed > 0 and self.event_bus:
+            self.event_bus.publish("token_deployed", {
+                "session_id": session_id,
+                "tool_name": tool_name,
+                "count": tokens_deployed,
+                "total_tokens": tokens_after,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             })
 

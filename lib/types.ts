@@ -75,8 +75,17 @@ export interface SessionUpdateEvent {
   interaction_count: number;
 }
 
+export interface TokenDeployedEvent {
+  session_id: string;
+  tool_name: string;
+  count: number;
+  total_tokens: number;
+  timestamp: string;
+}
+
 export type LiveEvent =
   | { type: "interaction"; data: InteractionEvent }
   | { type: "session_new"; data: SessionNewEvent }
   | { type: "session_update"; data: SessionUpdateEvent }
+  | { type: "token_deployed"; data: TokenDeployedEvent }
   | { type: "stats"; data: DashboardStats };

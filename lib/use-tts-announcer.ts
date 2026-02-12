@@ -1,22 +1,15 @@
 import { useEffect, useRef } from "react";
 import type { LiveEvent } from "./types";
 
-const MIN_INTERVAL_MS = 4000;
-const MAX_QUEUE = 5;
+const MIN_INTERVAL_MS = 3000;
+const MAX_QUEUE = 8;
 
 function formatToolName(name: string): string {
   return name
     .replace(/_/g, " ")
-    .replace(/sql/gi, "SQL")
-    .replace(/\bmap\b/gi, "map");
+    .replace(/\bsqlmap\b/gi, "SQL map")
+    .replace(/\bnmap\b/gi, "N map");
 }
-
-const HIGH_VALUE_TOOLS = new Set([
-  "sqlmap_scan",
-  "shell_exec",
-  "file_read",
-  "browser_navigate",
-]);
 
 export function useTTSAnnouncer(
   subscribe: (cb: (event: LiveEvent) => void) => () => void,
@@ -44,6 +37,12 @@ export function useTTSAnnouncer(
 
     function doSpeak(text: string) {
       const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = "en-US";
+      const voices = window.speechSynthesis.getVoices();
+      const usVoice = voices.find(
+        (v) => v.lang === "en-US" && v.localService,
+      );
+      if (usVoice) utterance.voice = usVoice;
       utterance.rate = 1.1;
       utterance.pitch = 0.9;
       utterance.volume = 0.8;
@@ -67,24 +66,42 @@ export function useTTSAnnouncer(
 
     const unsubscribe = subscribe((event: LiveEvent) => {
       switch (event.type) {
+        // --- Threat events ---
         case "session_new": {
           const name = event.data.client_info?.name || "unknown agent";
-          speak(`New session detected. Agent: ${name}`);
-          break;
-        }
-        case "session_update": {
-          if (event.data.escalation_level >= 2) {
-            speak(`Session escalated to level ${event.data.escalation_level}`);
-          }
+          speak(`Threat detected. New session from agent: ${name}`);
           break;
         }
         case "interaction": {
           const tool = event.data.tool_name;
           const level = event.data.escalation_level;
-          if (level >= 2 || (tool && HIGH_VALUE_TOOLS.has(tool))) {
-            const toolLabel = tool ? formatToolName(tool) : "unknown";
-            speak(`Alert. Escalation level ${level}. Tool: ${toolLabel}`);
+          const delta = event.data.escalation_delta;
+          const toolLabel = tool ? formatToolName(tool) : "unknown tool";
+          if (delta > 0) {
+            speak(`Threat escalation. Tool: ${toolLabel}. Level now ${level}`);
+          } else {
+            speak(`Activity detected. Tool: ${toolLabel}. Level ${level}`);
           }
+          break;
+        }
+        case "session_update": {
+          const level = event.data.escalation_level;
+          if (level >= 3) {
+            speak(`Critical alert. Session reached escalation level ${level}`);
+          } else if (level >= 2) {
+            speak(`Warning. Session escalated to level ${level}`);
+          } else {
+            speak(`Session updated. Escalation level ${level}`);
+          }
+          break;
+        }
+        // --- Defensive actions ---
+        case "token_deployed": {
+          const count = event.data.count;
+          const tool = formatToolName(event.data.tool_name);
+          const total = event.data.total_tokens;
+          const plural = count > 1 ? "tokens" : "token";
+          speak(`Defense active. ${count} honey ${plural} deployed via ${tool}. Total: ${total}`);
           break;
         }
       }

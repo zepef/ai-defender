@@ -86,6 +86,13 @@ export function useLiveStream() {
         } catch { /* ignore */ }
       });
 
+      es.addEventListener("token_deployed", (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          notify({ type: "token_deployed", data });
+        } catch { /* ignore */ }
+      });
+
       es.addEventListener("reconnect", () => {
         es.close();
         retryCount.current = 0;

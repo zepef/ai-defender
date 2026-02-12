@@ -13,6 +13,7 @@ import { ParticleSystem, type ParticleSystemHandle } from "./particle-system";
 import { StatsOverlay } from "./overlays/stats-overlay";
 import { EventFeedOverlay } from "./overlays/event-feed-overlay";
 import { SessionDetailPanel } from "./overlays/session-detail-panel";
+import { SessionsListOverlay } from "./overlays/sessions-list-overlay";
 import { useTTSAnnouncer } from "@/lib/use-tts-announcer";
 
 // --- State management ---
@@ -187,10 +188,16 @@ export function AttackVisualization() {
       <StatsOverlay stats={stats} connected={connected} />
       <EventFeedOverlay interactions={recentInteractions} />
 
-      {state.selectedSessionId && (
+      {state.selectedSessionId ? (
         <SessionDetailPanel
           sessionId={state.selectedSessionId}
           onClose={handleDeselect}
+        />
+      ) : (
+        <SessionsListOverlay
+          sessions={state.sessions}
+          selectedId={state.selectedSessionId}
+          onSelect={handleSelect}
         />
       )}
 
