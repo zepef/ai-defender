@@ -4,6 +4,7 @@ import { useRef, useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
 import { Instance, Instances } from "@react-three/drei";
 import * as THREE from "three";
+import { computeSessionPosition, VIVID_COLORS, type VividColorConfig } from "./orbital-utils";
 
 export interface SessionNodeData {
   session_id: string;
@@ -13,62 +14,33 @@ export interface SessionNodeData {
   timestamp: string;
 }
 
-const ESCALATION_COLORS: Record<number, string> = {
-  0: "#22c55e", // green
-  1: "#eab308", // yellow
-  2: "#f97316", // orange
-  3: "#ef4444", // red
-};
-
-const ESCALATION_RADIUS: Record<number, number> = {
-  0: 10,
-  1: 8,
-  2: 6,
-  3: 4,
-};
-
-function hashCode(str: string): number {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash |= 0;
-  }
-  return Math.abs(hash);
-}
-
 function SessionNode({
   data,
   index,
-  total,
   onClick,
   selected,
 }: {
   data: SessionNodeData;
   index: number;
-  total: number;
   onClick: (id: string) => void;
   selected: boolean;
 }) {
   const ref = useRef<THREE.InstancedMesh>(null);
-  const angle = useMemo(() => {
-    return (hashCode(data.session_id) % 1000) / 1000 * Math.PI * 2;
-  }, [data.session_id]);
+  const posVec = useMemo(() => new THREE.Vector3(), []);
 
-  const radius = ESCALATION_RADIUS[data.escalation_level] ?? 10;
-  const color = ESCALATION_COLORS[data.escalation_level] ?? "#22c55e";
+  const color = (VIVID_COLORS[data.escalation_level] ?? VIVID_COLORS[0]).color;
   const size = Math.min(0.3 + data.interaction_count * 0.05, 0.8);
 
   useFrame(({ clock }) => {
-    if (ref.current) {
-      const t = clock.getElapsedTime();
-      const orbitSpeed = 0.1;
-      const currentAngle = angle + t * orbitSpeed;
-      const x = Math.cos(currentAngle) * radius;
-      const z = Math.sin(currentAngle) * radius;
-      const y = Math.sin(t * 0.5 + index) * 0.3;
-      ref.current.position.set(x, y, z);
-    }
+    if (!ref.current) return;
+    computeSessionPosition(
+      data.session_id,
+      data.escalation_level,
+      index,
+      clock.getElapsedTime(),
+      posVec,
+    );
+    ref.current.position.copy(posVec);
   });
 
   return (
@@ -84,6 +56,45 @@ function SessionNode({
   );
 }
 
+function SessionLevelGroup({
+  level,
+  sessions,
+  selectedId,
+  onSelect,
+  indexMap,
+}: {
+  level: number;
+  sessions: SessionNodeData[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  indexMap: Map<string, number>;
+}) {
+  const cfg: VividColorConfig = VIVID_COLORS[level] ?? VIVID_COLORS[0];
+
+  return (
+    <Instances limit={200}>
+      <sphereGeometry args={[1, 16, 16]} />
+      <meshStandardMaterial
+        color={cfg.color}
+        emissive={cfg.emissive}
+        emissiveIntensity={cfg.emissiveIntensity}
+        roughness={cfg.roughness}
+        metalness={0.5}
+        toneMapped={false}
+      />
+      {sessions.map((s) => (
+        <SessionNode
+          key={s.session_id}
+          data={s}
+          index={indexMap.get(s.session_id) ?? 0}
+          onClick={onSelect}
+          selected={selectedId === s.session_id}
+        />
+      ))}
+    </Instances>
+  );
+}
+
 export function SessionNodes({
   sessions,
   selectedId,
@@ -93,28 +104,31 @@ export function SessionNodes({
   selectedId: string | null;
   onSelect: (id: string) => void;
 }) {
-  const sessionArray = useMemo(() => Array.from(sessions.values()), [sessions]);
+  const { groups, indexMap } = useMemo(() => {
+    const grouped = new Map<number, SessionNodeData[]>();
+    const idxMap = new Map<string, number>();
+    let i = 0;
+    for (const s of sessions.values()) {
+      const level = s.escalation_level;
+      if (!grouped.has(level)) grouped.set(level, []);
+      grouped.get(level)!.push(s);
+      idxMap.set(s.session_id, i++);
+    }
+    return { groups: grouped, indexMap: idxMap };
+  }, [sessions]);
 
   return (
-    <Instances limit={200}>
-      <sphereGeometry args={[1, 16, 16]} />
-      <meshStandardMaterial
-        emissive="white"
-        emissiveIntensity={0.5}
-        roughness={0.3}
-        metalness={0.5}
-        toneMapped={false}
-      />
-      {sessionArray.map((s, i) => (
-        <SessionNode
-          key={s.session_id}
-          data={s}
-          index={i}
-          total={sessionArray.length}
-          onClick={onSelect}
-          selected={selectedId === s.session_id}
+    <group>
+      {Array.from(groups.entries()).map(([level, levelSessions]) => (
+        <SessionLevelGroup
+          key={level}
+          level={level}
+          sessions={levelSessions}
+          selectedId={selectedId}
+          onSelect={onSelect}
+          indexMap={indexMap}
         />
       ))}
-    </Instances>
+    </group>
   );
 }

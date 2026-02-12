@@ -3,57 +3,31 @@
 import { useRef, useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
 import { Line } from "@react-three/drei";
-import * as THREE from "three";
 import type { SessionNodeData } from "./session-nodes";
-
-const ESCALATION_COLORS: Record<number, string> = {
-  0: "#22c55e",
-  1: "#eab308",
-  2: "#f97316",
-  3: "#ef4444",
-};
-
-const ESCALATION_RADIUS: Record<number, number> = {
-  0: 10,
-  1: 8,
-  2: 6,
-  3: 4,
-};
-
-function hashCode(str: string): number {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash |= 0;
-  }
-  return Math.abs(hash);
-}
+import { computeSessionPosition, VIVID_COLORS } from "./orbital-utils";
+import * as THREE from "three";
 
 function Edge({ data, index }: { data: SessionNodeData; index: number }) {
   const ref = useRef<THREE.Group>(null);
-  const angle = useMemo(
-    () => (hashCode(data.session_id) % 1000) / 1000 * Math.PI * 2,
-    [data.session_id]
-  );
-  const radius = ESCALATION_RADIUS[data.escalation_level] ?? 10;
-  const color = ESCALATION_COLORS[data.escalation_level] ?? "#22c55e";
+  const posVec = useMemo(() => new THREE.Vector3(), []);
+  const color = (VIVID_COLORS[data.escalation_level] ?? VIVID_COLORS[0]).color;
 
   const pointsRef = useRef<[number, number, number][]>([
     [0, 0, 0],
-    [radius, 0, 0],
+    [10, 0, 0],
   ]);
 
   useFrame(({ clock }) => {
-    const t = clock.getElapsedTime();
-    const orbitSpeed = 0.1;
-    const currentAngle = angle + t * orbitSpeed;
-    const x = Math.cos(currentAngle) * radius;
-    const z = Math.sin(currentAngle) * radius;
-    const y = Math.sin(t * 0.5 + index) * 0.3;
+    computeSessionPosition(
+      data.session_id,
+      data.escalation_level,
+      index,
+      clock.getElapsedTime(),
+      posVec,
+    );
     pointsRef.current = [
       [0, 0, 0],
-      [x, y, z],
+      [posVec.x, posVec.y, posVec.z],
     ];
   });
 

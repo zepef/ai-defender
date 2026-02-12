@@ -24,7 +24,7 @@ export function RelativeTime({ iso }: { iso: string }) {
   }, [iso]);
 
   return (
-    <time dateTime={iso} title={new Date(iso).toLocaleString()}>
+    <time dateTime={iso} title={new Date(iso).toLocaleString()} suppressHydrationWarning>
       {text}
     </time>
   );

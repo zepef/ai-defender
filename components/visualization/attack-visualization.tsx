@@ -8,10 +8,12 @@ import { SceneSetup } from "./scene-setup";
 import { HoneypotCore } from "./honeypot-core";
 import { SessionNodes, type SessionNodeData } from "./session-nodes";
 import { ConnectionEdges } from "./connection-edges";
+import { SessionLabels } from "./session-labels";
 import { ParticleSystem, type ParticleSystemHandle } from "./particle-system";
 import { StatsOverlay } from "./overlays/stats-overlay";
 import { EventFeedOverlay } from "./overlays/event-feed-overlay";
 import { SessionDetailPanel } from "./overlays/session-detail-panel";
+import { useTTSAnnouncer } from "@/lib/use-tts-announcer";
 
 // --- State management ---
 
@@ -92,6 +94,8 @@ export function AttackVisualization() {
 
   const { stats, connected, recentInteractions, subscribe } = useLiveEventContext();
   const particleRef = useRef<ParticleSystemHandle | null>(null);
+
+  useTTSAnnouncer(subscribe);
 
   // Load initial sessions
   useEffect(() => {
@@ -175,6 +179,7 @@ export function AttackVisualization() {
           onSelect={handleSelect}
         />
         <ConnectionEdges sessions={state.sessions} />
+        <SessionLabels sessions={state.sessions} selectedId={state.selectedSessionId} />
         <ParticleSystem onReady={handleParticleReady} />
       </Canvas>
 
