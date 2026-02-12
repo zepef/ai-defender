@@ -69,7 +69,8 @@ tools/hexstrike-ai/.venv/
 *.swp
 *.swo
 
-# Claude Code
-CLAUDE.md
+# Claude Code (keep root CLAUDE.md, ignore sub-directory ones)
+**/CLAUDE.md
+!/CLAUDE.md
 .serena/
 backend/.coverage
