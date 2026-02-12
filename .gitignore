@@ -68,3 +68,8 @@ tools/hexstrike-ai/.venv/
 .vscode/
 *.swp
 *.swo
+
+# Claude Code
+CLAUDE.md
+.serena/
+backend/.coverage
