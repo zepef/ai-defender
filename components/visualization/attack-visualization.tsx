@@ -157,9 +157,15 @@ export function AttackVisualization() {
     dispatch({ type: "SELECT_SESSION", session_id: null });
   }, []);
 
+  const [resetKey, setResetKey] = useState(0);
+
   const handleReset = useCallback(() => {
     dispatch({ type: "RESET" });
     refreshStats();
+    setResetKey((k) => k + 1);
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
   }, [refreshStats]);
 
   const handleParticleReady = useCallback((handle: ParticleSystemHandle) => {
@@ -211,7 +217,7 @@ export function AttackVisualization() {
         />
       )}
 
-      <PromptMonitorOverlay />
+      <PromptMonitorOverlay key={resetKey} />
 
       {/* Control bar */}
       <ControlBar onReset={handleReset} ttsMuted={ttsMuted} onToggleTts={() => setTtsMuted((m) => !m)} />
