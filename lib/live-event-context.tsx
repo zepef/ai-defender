@@ -12,6 +12,7 @@ interface LiveEventState {
   error: string | null;
   recentInteractions: InteractionEvent[];
   subscribe: (callback: LiveEventCallback) => () => void;
+  refreshStats: () => void;
 }
 
 const LiveEventContext = createContext<LiveEventState>({
@@ -20,6 +21,7 @@ const LiveEventContext = createContext<LiveEventState>({
   error: null,
   recentInteractions: [],
   subscribe: () => () => {},
+  refreshStats: () => {},
 });
 
 export function LiveEventProvider({ children }: { children: React.ReactNode }) {

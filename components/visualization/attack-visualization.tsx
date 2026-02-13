@@ -97,7 +97,7 @@ export function AttackVisualization() {
     selectedSessionId: null,
   });
 
-  const { stats, connected, recentInteractions, subscribe } = useLiveEventContext();
+  const { stats, connected, recentInteractions, subscribe, refreshStats } = useLiveEventContext();
   const particleRef = useRef<ParticleSystemHandle | null>(null);
   const [ttsMuted, setTtsMuted] = useState(false);
 
@@ -159,7 +159,8 @@ export function AttackVisualization() {
 
   const handleReset = useCallback(() => {
     dispatch({ type: "RESET" });
-  }, []);
+    refreshStats();
+  }, [refreshStats]);
 
   const handleParticleReady = useCallback((handle: ParticleSystemHandle) => {
     particleRef.current = handle;

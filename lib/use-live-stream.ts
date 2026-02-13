@@ -150,5 +150,15 @@ export function useLiveStream() {
     };
   }, [notify]);
 
-  return { stats, connected, error, recentInteractions, subscribe };
+  const refreshStats = useCallback(() => {
+    fetch("/api/stats")
+      .then((r) => r.json())
+      .then((data) => {
+        setStats(data);
+        setRecentInteractions([]);
+      })
+      .catch(() => {});
+  }, []);
+
+  return { stats, connected, error, recentInteractions, subscribe, refreshStats };
 }
