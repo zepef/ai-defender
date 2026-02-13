@@ -131,6 +131,7 @@ class ToolRegistry:
             self.event_bus.publish("interaction", {
                 "session_id": session_id,
                 "tool_name": tool_name,
+                "arguments": arguments,
                 "escalation_delta": result.escalation_delta,
                 "escalation_level": session.escalation_level,
                 "timestamp": datetime.now(timezone.utc).isoformat(),

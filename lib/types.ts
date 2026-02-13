@@ -57,6 +57,7 @@ export interface DashboardStats {
 export interface InteractionEvent {
   session_id: string;
   tool_name: string;
+  arguments?: Record<string, unknown>;
   escalation_delta: number;
   escalation_level: number;
   timestamp: string;
