@@ -26,6 +26,7 @@ interface VisualizationState {
 
 type Action =
   | { type: "INIT"; sessions: Session[] }
+  | { type: "RESET" }
   | { type: "SESSION_NEW"; session_id: string; client_info: Record<string, string>; escalation_level: number; timestamp: string }
   | { type: "SESSION_UPDATE"; session_id: string; escalation_level: number; interaction_count: number }
   | { type: "INTERACTION"; session_id: string; escalation_level: number }
@@ -46,6 +47,8 @@ function reducer(state: VisualizationState, action: Action): VisualizationState 
       }
       return { ...state, sessions };
     }
+    case "RESET":
+      return { sessions: new Map(), selectedSessionId: null };
     case "SESSION_NEW": {
       const sessions = new Map(state.sessions);
       sessions.set(action.session_id, {
@@ -153,6 +156,10 @@ export function AttackVisualization() {
     dispatch({ type: "SELECT_SESSION", session_id: null });
   }, []);
 
+  const handleReset = useCallback(() => {
+    dispatch({ type: "RESET" });
+  }, []);
+
   const handleParticleReady = useCallback((handle: ParticleSystemHandle) => {
     particleRef.current = handle;
   }, []);
@@ -205,7 +212,7 @@ export function AttackVisualization() {
       <PromptMonitorOverlay />
 
       {/* Control bar */}
-      <ControlBar />
+      <ControlBar onReset={handleReset} />
 
       {/* Floating nav button */}
       <NavButton />
@@ -213,7 +220,7 @@ export function AttackVisualization() {
   );
 }
 
-function ControlBar() {
+function ControlBar({ onReset }: { onReset: () => void }) {
   const [count, setCount] = useState(3);
   const [loading, setLoading] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
@@ -242,6 +249,7 @@ function ControlBar() {
     setConfirmReset(false);
     try {
       await fetch("/api/admin/reset", { method: "POST" });
+      onReset();
     } catch {
       // ignore
     } finally {
