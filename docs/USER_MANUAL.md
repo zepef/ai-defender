@@ -295,16 +295,18 @@ The homepage displays a real-time 3D visualization of all active honeypot sessio
 - **Left panel** (Sessions List): Lists all active sessions sorted by escalation level. Click a session to view its details
 - **Left panel** (Session Detail): When a session is selected, shows session ID, escalation level, client info, and the last 20 interactions
 
-**Prompt Injection Monitor** (bottom-left overlay):
+**Prompt Injection Monitor** (bottom-left overlay, 380px):
 - Real-time feed showing what attackers are requesting and how the honeypot responds
 - Three entry types with distinct color coding:
 
-| Type | Color | Source | Example |
-|------|-------|--------|---------|
-| Prompt | Red | Attacker's tool call summary | `nmap_scan: 10.0.1.0/24 quick scan` |
-| Injection | Green | Honeypot breadcrumb/lure injected into output | `Lure: SQL injection in /api/users` |
-| Token | Cyan | Honey token deployment | `2 credentials deployed via file_read` |
+| Type | Label | Color | Content |
+|------|-------|-------|---------|
+| Attacker | ATTACKER | Red | Color-coded tool name badge with full arguments shown as `key: value` lines |
+| Honeypot Lure | HONEYPOT LURE | Green | Breadcrumb/lure text injected into output (prefixes like "Breadcrumb:" stripped) |
+| Token Deployed | TOKEN DEPLOYED | Cyan | Honey token deployment count and tool name |
 
+- Attacker entries show a tool-colored badge (matching particle colors) with each argument on its own monospaced line for full readability
+- Falls back to a one-line summary if arguments are not available
 - Shows the last 30 entries, most recent first
 - Hidden when no entries have been received
 
@@ -882,7 +884,7 @@ The dashboard receives live updates from the backend via Server-Sent Events (SSE
 |-------|------|---------|
 | `stats` | Full `DashboardStats` object | On initial connection |
 | `session_new` | `{session_id, client_info, escalation_level, timestamp}` | New AI agent connects |
-| `interaction` | `{session_id, tool_name, escalation_delta, escalation_level, prompt_summary, injection, timestamp}` | Tool call executed |
+| `interaction` | `{session_id, tool_name, arguments, escalation_delta, escalation_level, prompt_summary, injection, timestamp}` | Tool call executed |
 | `token_deployed` | `{session_id, tool_name, count, total_tokens, timestamp}` | Honey tokens injected |
 | `session_update` | `{session_id, escalation_level, interaction_count}` | Session state changes |
 

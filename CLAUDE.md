@@ -49,8 +49,9 @@ All simulators extend `ToolSimulator` ABC in `backend/honeypot/simulators/base.p
 
 ### SSE Event Fields
 The `interaction` event includes:
-- `session_id`, `tool_name`, `escalation_delta`, `escalation_level`, `timestamp`
-- `prompt_summary`: human-readable summary of the tool call
+- `session_id`, `tool_name`, `arguments`, `escalation_delta`, `escalation_level`, `timestamp`
+- `arguments`: raw tool call parameters dict (full key-value pairs sent to the simulator)
+- `prompt_summary`: human-readable summary of the tool call (fallback when arguments absent)
 - `injection`: breadcrumb/lure text injected by the engagement engine (or null)
 
 ### Frontend Event Consumption
@@ -64,7 +65,7 @@ The `interaction` event includes:
 | Event Feed | Top right | Scrolling interactions with color-coded tool badges |
 | Sessions List | Left | Active sessions sorted by escalation |
 | Session Detail | Left (on select) | Selected session interactions and client info |
-| Prompt Monitor | Bottom left | Attacker requests + honeypot lures + token deployments |
+| Prompt Monitor | Bottom left (380px) | ATTACKER entries with color-coded tool badge + full arguments, HONEYPOT LURE entries (cleaned breadcrumbs), TOKEN DEPLOYED entries |
 
 ## Particle Colors by Tool
 
