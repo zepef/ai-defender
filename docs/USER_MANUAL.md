@@ -310,6 +310,12 @@ The homepage displays a real-time 3D visualization of all active honeypot sessio
 - Shows the last 30 entries, most recent first
 - Hidden when no entries have been received
 
+**Control Bar** (bottom-center):
+- **Reset button**: Deletes all sessions, interactions, and tokens from the database. Requires double-click confirmation (first click shows "Confirm?", auto-cancels after 3 seconds)
+- **Count input**: Number of attacks to launch (1-20, default 3)
+- **Launch button**: Creates N simulated attack sessions that auto-run realistic multi-tool call sequences with 1-2 second delays between steps. Each attack picks a random subset of 4-8 steps from a realistic progression (nmap scan, DNS lookup, file read, shell exec, SQL injection, browser navigation, AWS CLI access)
+- Both buttons are disabled while a request is in-flight (loading spinner shown)
+
 **Interaction:**
 - Click any session node to select it and open the detail panel
 - Use mouse to orbit, zoom, and pan the 3D scene
@@ -1072,6 +1078,34 @@ SSE polling stream. Query param: `interval` (2-30, default 2).
 
 SSE live event stream with typed events and reconnection support.
 
+#### `POST /api/admin/reset`
+
+Delete all sessions, interactions, and honey tokens. Clears the in-memory session cache and publishes zeroed stats via SSE so the frontend updates immediately.
+
+**Response:**
+```json
+{"deleted": 5}
+```
+
+#### `POST /api/admin/simulate`
+
+Launch simulated attack sessions.
+
+**Request:**
+```json
+{"count": 3}
+```
+
+The `count` parameter is clamped between 1 and 20. Each attack creates a session with a random attacker name (from a pool of 16 names like "NightCrawler", "VenomProxy", "DarkPulse", etc.) and spawns a background thread that runs 4-8 tool calls with 1-2 second random delays between steps. The endpoint returns immediately; SSE events flow to the frontend in real time as the attacks progress.
+
+**Response:**
+```json
+{
+  "launched": 3,
+  "session_ids": ["a1b2c3...", "d4e5f6...", "g7h8i9..."]
+}
+```
+
 ---
 
 ## 12. MCP Protocol Reference
@@ -1277,20 +1311,54 @@ purge_old_tokens(db_path, older_than_days=90)
 
 ## 14. Deployment
 
-### Fly.io
+### Fly.io (Two-App Architecture)
 
-The project includes a `fly.toml` configuration:
+The application is deployed as two separate Fly apps that communicate over Fly's internal private network:
 
-- **Region:** Amsterdam (ams)
-- **VM:** shared-cpu-1x, 512MB RAM
-- **Storage:** Persistent volume mounted at `/data`
-- **Health check:** `GET /health` every 30 seconds
-- **Auto-scaling:** Always-on (min 1 machine, auto-stop disabled)
-- **HTTPS:** Forced
+```
+Internet
+   │
+   ▼
+┌─────────────────────────┐     Fly private network (.internal)
+│ ai-defender (frontend)  │ ──────────────────────────────────────►  ai-defender-api (backend)
+│ Next.js on port 3000    │   API_URL=http://ai-defender-api.internal:5000
+│ fly.toml (root)         │
+└─────────────────────────┘
+```
+
+**Frontend app (`ai-defender`)** -- `fly.toml` in project root:
+- Public URL: https://ai-defender.fly.dev
+- Serves the Next.js dashboard
+- Proxies `/api/*` requests to the backend over internal network
+- VM: shared-cpu-1x, 256MB RAM
+- Auto-stop when idle, auto-start on request
+
+**Backend app (`ai-defender-api`)** -- `backend/fly.toml`:
+- Public URL: https://ai-defender-api.fly.dev
+- Serves the Flask MCP server and REST API
+- MCP endpoint publicly reachable at `POST /mcp` for AI agents
+- Health check: `GET /health` every 30 seconds
+- SQLite persistent volume (`honeypot_data`) mounted at `/data`
+- VM: shared-cpu-1x, 256MB RAM
+- CORS configured for `https://ai-defender.fly.dev`
+- Auto-stop when idle, auto-start on request
 
 **Deploy:**
 ```bash
-fly deploy
+# Deploy backend first, then frontend
+cd backend && fly deploy
+cd .. && fly deploy
+```
+
+**Verify:**
+```bash
+fly status -a ai-defender-api   # Backend machine status
+fly status -a ai-defender       # Frontend machine status
+curl https://ai-defender-api.fly.dev/health   # Backend health
+curl https://ai-defender.fly.dev/             # Frontend loads
+curl -X POST -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"initialize","id":1}' \
+  https://ai-defender-api.fly.dev/mcp         # MCP endpoint
 ```
 
 ### Docker Compose (Self-Hosted)

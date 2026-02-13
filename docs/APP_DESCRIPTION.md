@@ -462,6 +462,8 @@ Two `@before_request` hooks run on every API request:
 | `/api/sessions/<id>/interactions` | GET | Paginated interaction list for a session |
 | `/api/sessions/<id>/tokens` | GET | All honey tokens deployed in a session |
 | `/api/tokens` | GET | Paginated global token list. Supports `token_type` filter |
+| `/api/admin/reset` | POST | Deletes all sessions (cascades to interactions and tokens), clears session cache, publishes zeroed stats via EventBus |
+| `/api/admin/simulate` | POST | Accepts `{"count": N}` (clamped 1-20). Creates N sessions with random attacker names from a 16-name pool, spawns background threads that run 4-8 tool calls each with 1-2 second random delays. Returns immediately with `{"launched": N, "session_ids": [...]}` |
 
 Pagination is clamped: limit between 1 and 200, offset minimum 0.
 
@@ -579,12 +581,17 @@ For **SSE endpoints** (any path starting with `events`): the handler fetches the
 upstream response and streams its body through as-is, setting the `Content-Type` to
 `text/event-stream`.
 
-For **JSON endpoints**: the handler fetches the upstream response, reads the body as
+For **JSON GET endpoints**: the handler fetches the upstream response, reads the body as
 text, and forwards it with the original status code and content type.
+
+For **POST endpoints** (e.g. admin actions): the handler reads the request body as text,
+forwards it to Flask with `Content-Type: application/json`, and returns the upstream
+response.
 
 If `DASHBOARD_API_KEY` is configured, the proxy injects an `Authorization: Bearer`
 header into the upstream request. This means the browser does not need the API key --
-it is handled server-side by the proxy.
+it is handled server-side by the proxy. A shared `baseHeaders()` helper constructs the
+common headers for both GET and POST handlers.
 
 ---
 
@@ -694,6 +701,8 @@ HTML overlays on top.
 | `SessionsListOverlay` | Left panel | Active sessions sorted by escalation level descending. Clicking a session selects it |
 | `SessionDetailPanel` | Left panel (replaces list on select) | Detailed view of the selected session: interactions, client info, close button |
 | `PromptMonitorOverlay` | Bottom left | Three entry types: ATTACKER (tool call with arguments), HONEYPOT LURE (breadcrumb injection), TOKEN DEPLOYED (credential injection) |
+| `ControlBar` | Bottom center | Admin controls: Reset button (double-click confirmation with 3s timeout), count input (1-20), Launch button (triggers simulated attacks). Loading spinner while requests are in-flight |
+| `NavButton` | Bottom right | Link to the dashboard stats page |
 
 ### State management
 
@@ -795,12 +804,26 @@ Two services:
 - Runs as non-root `nextjs` user.
 - Depends on honeypot service health check passing.
 
-### Fly.io (`fly.toml`)
+### Fly.io (Two-App Architecture)
 
-- Single VM in Amsterdam region.
-- `shared-cpu-1x`, 512 MB RAM.
-- Persistent volume at `/data` for SQLite.
+The application is deployed as two separate Fly apps:
+
+**`ai-defender`** (frontend) -- configured in `fly.toml` at project root:
+- Public URL: https://ai-defender.fly.dev
+- Amsterdam region, `shared-cpu-1x`, 256 MB RAM.
+- Env var `API_URL=http://ai-defender-api.internal:5000` routes API proxy to backend over Fly's internal private network.
+- Auto-stop when idle, auto-start on request.
+
+**`ai-defender-api`** (backend) -- configured in `backend/fly.toml`:
+- Public URL: https://ai-defender-api.fly.dev
+- Amsterdam region, `shared-cpu-1x`, 256 MB RAM.
+- Persistent volume `honeypot_data` at `/data` for SQLite.
 - Health checks every 30 seconds on `GET /health`.
+- CORS origin set to `https://ai-defender.fly.dev`.
+- MCP endpoint (`POST /mcp`) publicly accessible for AI agents.
+- Auto-stop when idle, auto-start on request.
+
+The frontend proxies all `/api/*` browser requests to the backend over the internal network. The browser never talks directly to Flask.
 
 ---
 

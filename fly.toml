@@ -6,6 +6,7 @@ primary_region = 'ams'
 [env]
   NODE_ENV = 'production'
   PORT = '3000'
+  API_URL = 'http://ai-defender-api.internal:5000'
 
 [http_service]
   internal_port = 3000

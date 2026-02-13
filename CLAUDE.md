@@ -11,6 +11,18 @@ AI Defender is a honeypot MCP server that traps and monitors malicious AI agents
 - **Protocol**: MCP (Model Context Protocol) over JSON-RPC 2.0 at `POST /mcp`
 - **Dashboard API**: REST + SSE at `/api/*` and `/api/events/live`
 
+### Fly.io Deployment (Two Apps)
+
+| App | URL | Purpose |
+|-----|-----|---------|
+| `ai-defender` | https://ai-defender.fly.dev | Next.js frontend (public) |
+| `ai-defender-api` | https://ai-defender-api.fly.dev | Flask backend (public MCP endpoint + health) |
+
+- Frontend proxies `/api/*` to backend over Fly internal network (`ai-defender-api.internal:5000`)
+- MCP endpoint publicly reachable at `POST https://ai-defender-api.fly.dev/mcp`
+- SQLite persisted on a Fly volume mounted at `/data`
+- Both apps use `shared-cpu-1x` / 256MB, auto-stop when idle, auto-start on request
+
 ## Honeypot Tools (10)
 
 | Tool | Category | Tokens Injected | Key Behavior |
@@ -66,6 +78,25 @@ The `interaction` event includes:
 | Sessions List | Left | Active sessions sorted by escalation |
 | Session Detail | Left (on select) | Selected session interactions and client info |
 | Prompt Monitor | Bottom left (380px) | ATTACKER entries with color-coded tool badge + full arguments, HONEYPOT LURE entries (cleaned breadcrumbs), TOKEN DEPLOYED entries |
+| Control Bar | Bottom center | Reset (confirmation required), attack count input (1-20), Launch button. Calls `POST /api/admin/reset` and `POST /api/admin/simulate` |
+
+## Admin API Endpoints
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/admin/reset` | POST | Wipes all sessions/interactions/tokens, clears session cache, publishes zeroed stats via SSE |
+| `/api/admin/simulate` | POST | Accepts `{"count": N}` (1-20), creates N sessions with random attacker names, spawns background threads running 4-8 tool calls each with 1-2s delays |
+
+### Attack Simulation Sequence
+Each simulated attack picks a random subset (4-8 steps) from:
+1. `nmap_scan` (target: "10.0.1.0/24") -- recon
+2. `dns_lookup` (domain: "corp.internal") -- recon
+3. `file_read` (path: "/app/.env") -- credential harvest
+4. `shell_exec` (command: "whoami") -- system info
+5. `sqlmap_scan` (action: "test") -- vuln testing
+6. `sqlmap_scan` (action: "dump", table: "users") -- credential dump
+7. `browser_navigate` (url: "/api/config") -- lateral movement
+8. `aws_cli` (command: "s3 ls") -- cloud access
 
 ## Particle Colors by Tool
 
@@ -101,11 +132,25 @@ cd backend && .venv/bin/python -m pytest -v
 ## Development
 
 ```bash
-# Backend
+# Backend (local)
 cd backend && source .venv/bin/activate && python -m honeypot.app
 
-# Frontend
+# Frontend (local)
 npm run dev
+```
+
+## Deployment (Fly.io)
+
+```bash
+# Deploy backend
+cd backend && fly deploy
+
+# Deploy frontend
+cd .. && fly deploy
+
+# Verify
+curl https://ai-defender-api.fly.dev/health
+curl https://ai-defender.fly.dev/
 ```
 
 ## Key Directories
@@ -130,4 +175,6 @@ lib/
   use-live-stream.ts    # SSE connection with reconnect
 docs/
   USER_MANUAL.md        # Full reference documentation
+fly.toml                # Fly.io config for frontend (ai-defender)
+backend/fly.toml        # Fly.io config for backend (ai-defender-api)
 ```
