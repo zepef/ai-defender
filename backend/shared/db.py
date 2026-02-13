@@ -312,6 +312,15 @@ def purge_old_tokens(db_path: str, older_than_days: int = 90) -> int:
         return cursor.rowcount
 
 
+def clear_all_data(db_path: str) -> int:
+    """Delete all sessions (cascades to interactions and tokens). Returns count deleted."""
+    with get_connection(db_path) as conn:
+        cursor = conn.execute("SELECT COUNT(*) FROM sessions")
+        count = cursor.fetchone()[0]
+        conn.execute("DELETE FROM sessions")
+    return count
+
+
 def get_all_tokens(db_path: str, token_type: str | None = None,
                    limit: int = 50, offset: int = 0) -> tuple[list[dict], int]:
     where_parts: list[str] = []

@@ -1,6 +1,6 @@
 "use client";
 
-import { useReducer, useEffect, useRef, useCallback } from "react";
+import { useReducer, useEffect, useRef, useCallback, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { useLiveEventContext } from "@/lib/live-event-context";
 import type { LiveEvent, Session } from "@/lib/types";
@@ -204,8 +204,107 @@ export function AttackVisualization() {
 
       <PromptMonitorOverlay />
 
+      {/* Control bar */}
+      <ControlBar />
+
       {/* Floating nav button */}
       <NavButton />
+    </div>
+  );
+}
+
+function ControlBar() {
+  const [count, setCount] = useState(3);
+  const [loading, setLoading] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
+
+  const handleLaunch = async () => {
+    setLoading(true);
+    try {
+      await fetch("/api/admin/simulate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ count }),
+      });
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReset = async () => {
+    if (!confirmReset) {
+      setConfirmReset(true);
+      return;
+    }
+    setLoading(true);
+    setConfirmReset(false);
+    try {
+      await fetch("/api/admin/reset", { method: "POST" });
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Cancel confirmation after 3 seconds
+  useEffect(() => {
+    if (!confirmReset) return;
+    const timer = setTimeout(() => setConfirmReset(false), 3000);
+    return () => clearTimeout(timer);
+  }, [confirmReset]);
+
+  return (
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 bg-zinc-950/70 backdrop-blur-xl border border-white/10 rounded-xl px-3 py-2">
+      {/* Reset button */}
+      <button
+        disabled={loading}
+        onClick={handleReset}
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all disabled:opacity-40 ${
+          confirmReset
+            ? "bg-red-500/30 text-red-300 border border-red-500/40"
+            : "text-red-400 hover:bg-red-500/20 border border-transparent hover:border-red-500/30"
+        }`}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="3 6 5 6 21 6" />
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+        </svg>
+        {confirmReset ? "Confirm?" : "Reset"}
+      </button>
+
+      <div className="w-px h-6 bg-white/10" />
+
+      {/* Count input */}
+      <input
+        type="number"
+        min={1}
+        max={20}
+        value={count}
+        onChange={(e) => setCount(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
+        disabled={loading}
+        className="w-14 bg-zinc-800/60 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-center text-zinc-200 focus:outline-none focus:border-white/25 disabled:opacity-40"
+      />
+
+      {/* Launch button */}
+      <button
+        disabled={loading}
+        onClick={handleLaunch}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-emerald-400 hover:bg-emerald-500/20 border border-transparent hover:border-emerald-500/30 transition-all disabled:opacity-40"
+      >
+        {loading ? (
+          <svg className="animate-spin" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+          </svg>
+        ) : (
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+            <polygon points="5 3 19 12 5 21 5 3" />
+          </svg>
+        )}
+        Launch
+      </button>
     </div>
   );
 }

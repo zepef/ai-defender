@@ -78,6 +78,7 @@ def create_app(config: Config | None = None) -> Flask:
     registry = ToolRegistry(config, session_manager, event_bus=event_bus)
     protocol = ProtocolHandler(config, session_manager, registry)
     app._session_manager = session_manager  # type: ignore[attr-defined]
+    app._registry = registry  # type: ignore[attr-defined]
 
     def _shutdown_handler(signum, frame):  # type: ignore[no-untyped-def]
         session_manager.shutdown()

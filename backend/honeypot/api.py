@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import json
 import logging
+import random
 import secrets
 import time
 from datetime import datetime
-from threading import Lock
+from threading import Lock, Thread
 
 from flask import Blueprint, Response, current_app, jsonify, request
 
 from shared.db import (
+    clear_all_data,
     get_all_sessions,
     get_all_tokens,
     get_session,
@@ -276,3 +278,85 @@ def events():
 
     return Response(generate(), mimetype="text/event-stream",
                     headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+# ---------------------------------------------------------------------------
+# Admin endpoints
+# ---------------------------------------------------------------------------
+
+AGENT_NAMES = [
+    "NightCrawler", "VenomProxy", "SilkRoad-Bot", "DarkPulse",
+    "CryptoPhantom", "ShadowMiner", "ZeroDayHunter", "PhishKing",
+    "BotNet-Alpha", "DeepExploit", "NeuralThief", "AgentSmith",
+    "RedSpider", "GhostShell", "MalwareX", "DataLeech",
+]
+
+ATTACK_SEQUENCE = [
+    ("nmap_scan", {"target": "10.0.1.0/24", "scan_type": "quick"}),
+    ("dns_lookup", {"domain": "corp.internal", "query_type": "A"}),
+    ("file_read", {"path": "/app/.env"}),
+    ("shell_exec", {"command": "whoami"}),
+    ("sqlmap_scan", {"url": "http://app.corp.internal/api/users?id=1", "action": "test"}),
+    ("sqlmap_scan", {"url": "http://app.corp.internal/api/users?id=1", "action": "dump", "table": "users"}),
+    ("browser_navigate", {"url": "/api/config", "action": "navigate"}),
+    ("aws_cli", {"command": "s3 ls"}),
+]
+
+
+def _run_attack(app, registry, session_id: str, steps: list) -> None:
+    """Execute a sequence of tool calls with random delays (runs in background thread)."""
+    with app.app_context():
+        for tool_name, arguments in steps:
+            time.sleep(random.uniform(1.0, 2.0))
+            try:
+                registry.dispatch(tool_name, arguments, session_id)
+            except Exception:
+                logger.exception("Simulated attack step failed: %s for %s", tool_name, session_id)
+
+
+@api_bp.route("/admin/reset", methods=["POST"])
+def admin_reset():
+    from shared.event_bus import EventBus
+
+    db_path = _db_path()
+    deleted = clear_all_data(db_path)
+
+    # Clear in-memory session cache
+    sm = current_app._session_manager  # type: ignore[attr-defined]
+    with sm._lock:
+        sm._cache.clear()
+        sm._cache_times.clear()
+
+    # Publish zeroed stats so frontend updates immediately
+    bus: EventBus | None = current_app.config.get("EVENT_BUS")
+    if bus:
+        bus.publish("stats", get_stats(db_path))
+
+    return jsonify({"deleted": deleted})
+
+
+@api_bp.route("/admin/simulate", methods=["POST"])
+def admin_simulate():
+    body = request.get_json(silent=True) or {}
+    count = max(1, min(int(body.get("count", 3)), 20))
+
+    app = current_app._get_current_object()
+    sm = current_app._session_manager  # type: ignore[attr-defined]
+    registry = current_app._registry  # type: ignore[attr-defined]
+
+    session_ids = []
+    for _ in range(count):
+        name = random.choice(AGENT_NAMES)
+        sid = sm.create({"name": name, "version": "1.0", "transport": "simulated"})
+        session_ids.append(sid)
+
+        # Pick a random subset of 4-8 steps
+        step_count = random.randint(4, min(8, len(ATTACK_SEQUENCE)))
+        steps = random.sample(ATTACK_SEQUENCE, step_count)
+        # Sort by original order for realistic progression
+        steps.sort(key=lambda s: ATTACK_SEQUENCE.index(s))
+
+        thread = Thread(target=_run_attack, args=(app, registry, sid, steps), daemon=True)
+        thread.start()
+
+    return jsonify({"launched": count, "session_ids": session_ids})
