@@ -21,6 +21,14 @@ export function useTTSAnnouncer(
   const mutedRef = useRef(muted);
   mutedRef.current = muted;
 
+  // Cancel speech immediately when muted
+  useEffect(() => {
+    if (muted && typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+      queue.current = [];
+    }
+  }, [muted]);
+
   useEffect(() => {
     if (typeof window === "undefined" || !window.speechSynthesis) return;
 
