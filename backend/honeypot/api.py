@@ -291,15 +291,89 @@ AGENT_NAMES = [
     "RedSpider", "GhostShell", "MalwareX", "DataLeech",
 ]
 
-ATTACK_SEQUENCE = [
+# Steps grouped by attack phase for realistic progression
+RECON_STEPS = [
     ("nmap_scan", {"target": "10.0.1.0/24", "scan_type": "quick"}),
+    ("nmap_scan", {"target": "10.0.1.0/24", "scan_type": "stealth"}),
     ("dns_lookup", {"domain": "corp.internal", "query_type": "A"}),
-    ("file_read", {"path": "/app/.env"}),
+    ("dns_lookup", {"domain": "corp.internal", "query_type": "SRV"}),
+    ("dns_lookup", {"domain": "db-primary-01.corp.internal", "query_type": "A"}),
     ("shell_exec", {"command": "whoami"}),
+    ("shell_exec", {"command": "uname -a"}),
+    ("shell_exec", {"command": "id"}),
+    ("shell_exec", {"command": "cat /etc/hosts"}),
+    ("browser_navigate", {"url": "/api/health", "action": "navigate"}),
+]
+
+CREDENTIAL_STEPS = [
+    ("file_read", {"path": "/app/.env"}),
+    ("file_read", {"path": "/etc/passwd"}),
+    ("file_read", {"path": "/home/deploy/.ssh/id_rsa"}),
+    ("file_read", {"path": "/root/.aws/credentials"}),
+    ("file_read", {"path": "/app/config.yaml"}),
     ("sqlmap_scan", {"url": "http://app.corp.internal/api/users?id=1", "action": "test"}),
+    ("sqlmap_scan", {"url": "http://app.corp.internal/api/users?id=1", "action": "databases"}),
+    ("sqlmap_scan", {"url": "http://app.corp.internal/api/users?id=1", "action": "tables"}),
     ("sqlmap_scan", {"url": "http://app.corp.internal/api/users?id=1", "action": "dump", "table": "users"}),
+    ("sqlmap_scan", {"url": "http://app.corp.internal/api/users?id=1", "action": "dump", "table": "api_keys"}),
+    ("browser_navigate", {"url": "/api/users", "action": "navigate"}),
     ("browser_navigate", {"url": "/api/config", "action": "navigate"}),
+    ("browser_navigate", {"url": "/admin", "action": "navigate"}),
+]
+
+CLOUD_STEPS = [
     ("aws_cli", {"command": "s3 ls"}),
+    ("aws_cli", {"command": "s3 ls s3://corp-internal-backups"}),
+    ("aws_cli", {"command": "iam list-users"}),
+    ("aws_cli", {"command": "secretsmanager list-secrets"}),
+    ("aws_cli", {"command": "secretsmanager get-secret-value --secret-id prod/database/master"}),
+    ("aws_cli", {"command": "lambda list-functions"}),
+    ("aws_cli", {"command": "ec2 describe-instances"}),
+]
+
+INFRA_STEPS = [
+    ("kubectl", {"command": "get pods"}),
+    ("kubectl", {"command": "get services"}),
+    ("kubectl", {"command": "get secrets"}),
+    ("kubectl", {"command": "describe secret db-credentials"}),
+    ("kubectl", {"command": "describe secret admin-credentials"}),
+    ("kubectl", {"command": "describe secret ssh-deploy-key"}),
+    ("kubectl", {"command": "logs api-gateway-7d8f9c6b5-x2kl9"}),
+    ("docker_registry", {"action": "list"}),
+    ("docker_registry", {"action": "inspect", "image_name": "corp/api-gateway:latest"}),
+    ("docker_registry", {"action": "inspect", "image_name": "corp/admin-portal:latest"}),
+    ("docker_registry", {"action": "pull", "image_name": "corp/backup-agent:latest"}),
+]
+
+VAULT_STEPS = [
+    ("vault_cli", {"command": "status"}),
+    ("vault_cli", {"command": "list secret/"}),
+    ("vault_cli", {"command": "list secret/prod"}),
+    ("vault_cli", {"command": "read secret/prod/db"}),
+    ("vault_cli", {"command": "read secret/prod/aws"}),
+    ("vault_cli", {"command": "read secret/prod/api-keys"}),
+    ("vault_cli", {"command": "read secret/prod/ssh"}),
+    ("vault_cli", {"command": "read secret/prod/admin"}),
+]
+
+# Attack profiles: each defines phases with (step_pool, count_to_pick)
+ATTACK_PROFILES = [
+    # Recon Scout: quick scan, grab low-hanging fruit
+    [(RECON_STEPS, 3), (CREDENTIAL_STEPS, 2)],
+    # Credential Harvester: enumerate files and databases
+    [(RECON_STEPS, 1), (CREDENTIAL_STEPS, 5)],
+    # Cloud Exfiltrator: target AWS infrastructure
+    [(RECON_STEPS, 1), (CREDENTIAL_STEPS, 2), (CLOUD_STEPS, 4)],
+    # Infrastructure Mapper: k8s and container recon
+    [(RECON_STEPS, 2), (INFRA_STEPS, 5)],
+    # Vault Raider: go straight for secrets management
+    [(RECON_STEPS, 1), (VAULT_STEPS, 5)],
+    # Full Chain: complete attack lifecycle across all systems
+    [(RECON_STEPS, 2), (CREDENTIAL_STEPS, 2), (CLOUD_STEPS, 2), (INFRA_STEPS, 2), (VAULT_STEPS, 2)],
+    # SQLmap Expert: progressive SQL injection
+    [(RECON_STEPS, 1), (CREDENTIAL_STEPS, 4), (CLOUD_STEPS, 2)],
+    # Lateral Mover: pivot through infrastructure
+    [(RECON_STEPS, 2), (INFRA_STEPS, 3), (VAULT_STEPS, 3)],
 ]
 
 
@@ -350,11 +424,12 @@ def admin_simulate():
         sid = sm.create({"name": name, "version": "1.0", "transport": "simulated"})
         session_ids.append(sid)
 
-        # Pick a random subset of 4-8 steps
-        step_count = random.randint(4, min(8, len(ATTACK_SEQUENCE)))
-        steps = random.sample(ATTACK_SEQUENCE, step_count)
-        # Sort by original order for realistic progression
-        steps.sort(key=lambda s: ATTACK_SEQUENCE.index(s))
+        # Pick a random attack profile and build the step sequence
+        profile = random.choice(ATTACK_PROFILES)
+        steps = []
+        for pool, pick_count in profile:
+            picked = random.sample(pool, min(pick_count, len(pool)))
+            steps.extend(picked)
 
         thread = Thread(target=_run_attack, args=(app, registry, sid, steps), daemon=True)
         thread.start()
