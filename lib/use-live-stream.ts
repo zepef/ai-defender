@@ -68,6 +68,14 @@ export function useLiveStream() {
             const next = [data, ...prev];
             return next.length > RING_BUFFER_SIZE ? next.slice(0, RING_BUFFER_SIZE) : next;
           });
+          setStats((prev) => prev ? {
+            ...prev,
+            total_interactions: prev.total_interactions + 1,
+            tool_usage: {
+              ...prev.tool_usage,
+              [data.tool_name]: (prev.tool_usage[data.tool_name] || 0) + 1,
+            },
+          } : prev);
           notify({ type: "interaction", data });
         } catch { /* ignore */ }
       });
@@ -75,6 +83,11 @@ export function useLiveStream() {
       es.addEventListener("session_new", (e) => {
         try {
           const data = JSON.parse(e.data);
+          setStats((prev) => prev ? {
+            ...prev,
+            total_sessions: prev.total_sessions + 1,
+            active_sessions: prev.active_sessions + 1,
+          } : prev);
           notify({ type: "session_new", data });
         } catch { /* ignore */ }
       });
@@ -89,6 +102,10 @@ export function useLiveStream() {
       es.addEventListener("token_deployed", (e) => {
         try {
           const data = JSON.parse(e.data);
+          setStats((prev) => prev ? {
+            ...prev,
+            total_tokens: prev.total_tokens + data.count,
+          } : prev);
           notify({ type: "token_deployed", data });
         } catch { /* ignore */ }
       });

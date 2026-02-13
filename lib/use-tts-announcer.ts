@@ -40,6 +40,7 @@ export function useTTSAnnouncer(
     }
 
     function doSpeak(text: string) {
+      if (mutedRef.current) return;
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = "en-US";
       const voices = window.speechSynthesis.getVoices();
@@ -60,6 +61,10 @@ export function useTTSAnnouncer(
       const wait = Math.max(0, MIN_INTERVAL_MS - elapsed);
       timerRef.current = setTimeout(() => {
         timerRef.current = null;
+        if (mutedRef.current) {
+          queue.current = [];
+          return;
+        }
         const next = queue.current.shift();
         if (next) {
           doSpeak(next);

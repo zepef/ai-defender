@@ -44,7 +44,7 @@ export function SessionsListOverlay({
 
   return (
     <div
-      className={`fixed top-20 left-4 z-20 w-[260px] max-h-[calc(100vh-120px)] ${GLASS} p-4 flex flex-col gap-3 animate-in slide-in-from-left-4 duration-200`}
+      className={`fixed top-20 left-4 z-20 w-[260px] max-h-[calc(100vh-420px)] ${GLASS} p-4 flex flex-col gap-3 animate-in slide-in-from-left-4 duration-200`}
     >
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-medium text-zinc-300">Live Sessions</h2>

@@ -52,7 +52,7 @@ export function SessionDetailPanel({
 
   return (
     <div
-      className={`fixed top-20 left-4 z-20 w-[384px] max-h-[calc(100vh-120px)] overflow-y-auto ${glassPanel} p-5 animate-in slide-in-from-left-4 duration-200`}
+      className={`fixed top-20 left-4 z-20 w-[384px] max-h-[calc(100vh-420px)] overflow-y-auto ${glassPanel} p-5 animate-in slide-in-from-left-4 duration-200`}
     >
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-medium text-zinc-300">Session Detail</h3>
