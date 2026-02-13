@@ -13,15 +13,19 @@ function formatToolName(name: string): string {
 
 export function useTTSAnnouncer(
   subscribe: (cb: (event: LiveEvent) => void) => () => void,
+  muted: boolean = false,
 ) {
   const lastSpoke = useRef(0);
   const queue = useRef<string[]>([]);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mutedRef = useRef(muted);
+  mutedRef.current = muted;
 
   useEffect(() => {
     if (typeof window === "undefined" || !window.speechSynthesis) return;
 
     function speak(text: string) {
+      if (mutedRef.current) return;
       const now = Date.now();
       const elapsed = now - lastSpoke.current;
 

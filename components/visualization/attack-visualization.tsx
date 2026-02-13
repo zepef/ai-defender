@@ -99,8 +99,9 @@ export function AttackVisualization() {
 
   const { stats, connected, recentInteractions, subscribe } = useLiveEventContext();
   const particleRef = useRef<ParticleSystemHandle | null>(null);
+  const [ttsMuted, setTtsMuted] = useState(false);
 
-  useTTSAnnouncer(subscribe);
+  useTTSAnnouncer(subscribe, ttsMuted);
 
   // Load initial sessions
   useEffect(() => {
@@ -212,7 +213,7 @@ export function AttackVisualization() {
       <PromptMonitorOverlay />
 
       {/* Control bar */}
-      <ControlBar onReset={handleReset} />
+      <ControlBar onReset={handleReset} ttsMuted={ttsMuted} onToggleTts={() => setTtsMuted((m) => !m)} />
 
       {/* Floating nav button */}
       <NavButton />
@@ -220,7 +221,7 @@ export function AttackVisualization() {
   );
 }
 
-function ControlBar({ onReset }: { onReset: () => void }) {
+function ControlBar({ onReset, ttsMuted, onToggleTts }: { onReset: () => void; ttsMuted: boolean; onToggleTts: () => void }) {
   const [count, setCount] = useState(3);
   const [loading, setLoading] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
@@ -313,6 +314,26 @@ function ControlBar({ onReset }: { onReset: () => void }) {
         )}
         Launch
       </button>
+
+      <div className="w-px h-6 bg-white/10" />
+
+      {/* TTS mute toggle */}
+      <label className="flex items-center gap-1.5 cursor-pointer text-sm text-zinc-400 hover:text-zinc-200 transition-colors select-none">
+        <input
+          type="checkbox"
+          checked={ttsMuted}
+          onChange={onToggleTts}
+          className="sr-only peer"
+        />
+        <div className="w-4 h-4 rounded border border-white/20 peer-checked:bg-zinc-600 peer-checked:border-zinc-500 flex items-center justify-center transition-all">
+          {ttsMuted && (
+            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          )}
+        </div>
+        Mute
+      </label>
     </div>
   );
 }
