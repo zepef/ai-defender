@@ -701,7 +701,7 @@ HTML overlays on top.
 | `SessionsListOverlay` | Left panel | Active sessions sorted by escalation level descending. Clicking a session selects it |
 | `SessionDetailPanel` | Left panel (replaces list on select) | Detailed view of the selected session: interactions, client info, close button |
 | `PromptMonitorOverlay` | Bottom left | Three entry types: ATTACKER (tool call with arguments), HONEYPOT LURE (breadcrumb injection), TOKEN DEPLOYED (credential injection) |
-| `ControlBar` | Bottom center | Admin controls: Reset button (double-click confirmation with 3s timeout), count input (1-20), Launch button (triggers simulated attacks). Loading spinner while requests are in-flight |
+| `ControlBar` | Bottom center | Admin controls: Reset button (double-click confirmation with 3s timeout), count input (1-20), Launch button, Demo checkbox (3-6s delays for human viewing), Mute checkbox. Loading spinner while requests are in-flight |
 | `NavButton` | Bottom right | Link to the dashboard stats page |
 
 ### State management

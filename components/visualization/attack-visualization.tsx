@@ -232,6 +232,7 @@ function ControlBar({ onReset, ttsMuted, onToggleTts }: { onReset: () => void; t
   const [count, setCount] = useState(3);
   const [loading, setLoading] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [demo, setDemo] = useState(false);
 
   const handleLaunch = async () => {
     setLoading(true);
@@ -239,7 +240,7 @@ function ControlBar({ onReset, ttsMuted, onToggleTts }: { onReset: () => void; t
       await fetch("/api/admin/simulate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ count }),
+        body: JSON.stringify({ count, demo }),
       });
     } catch {
       // ignore
@@ -323,6 +324,24 @@ function ControlBar({ onReset, ttsMuted, onToggleTts }: { onReset: () => void; t
       </button>
 
       <div className="w-px h-6 bg-white/10" />
+
+      {/* Demo mode toggle */}
+      <label className="flex items-center gap-1.5 cursor-pointer text-sm text-zinc-400 hover:text-zinc-200 transition-colors select-none">
+        <input
+          type="checkbox"
+          checked={demo}
+          onChange={() => setDemo((d) => !d)}
+          className="sr-only peer"
+        />
+        <div className="w-4 h-4 rounded border border-white/20 peer-checked:bg-amber-600 peer-checked:border-amber-500 flex items-center justify-center transition-all">
+          {demo && (
+            <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          )}
+        </div>
+        Demo
+      </label>
 
       {/* TTS mute toggle */}
       <label className="flex items-center gap-1.5 cursor-pointer text-sm text-zinc-400 hover:text-zinc-200 transition-colors select-none">

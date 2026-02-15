@@ -78,14 +78,14 @@ The `interaction` event includes:
 | Sessions List | Left | Active sessions sorted by escalation |
 | Session Detail | Left (on select) | Selected session interactions and client info |
 | Prompt Monitor | Bottom left (380px) | ATTACKER entries with color-coded tool badge + full arguments, HONEYPOT LURE entries (cleaned breadcrumbs), TOKEN DEPLOYED entries |
-| Control Bar | Bottom center | Reset (confirmation required), attack count input (1-20), Launch button. Calls `POST /api/admin/reset` and `POST /api/admin/simulate` |
+| Control Bar | Bottom center | Reset (confirmation required), attack count input (1-20), Launch button, Demo checkbox (3-6s delays), Mute checkbox. Calls `POST /api/admin/reset` and `POST /api/admin/simulate` |
 
 ## Admin API Endpoints
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
 | `/api/admin/reset` | POST | Wipes all sessions/interactions/tokens, clears session cache, publishes zeroed stats via SSE |
-| `/api/admin/simulate` | POST | Accepts `{"count": N}` (1-20), creates N sessions with random attacker names, assigns a random attack profile, spawns background threads running tool calls with 1-2s delays |
+| `/api/admin/simulate` | POST | Accepts `{"count": N, "demo": bool}` (count 1-20). Creates N sessions with random attacker names, assigns a random attack profile, spawns background threads running tool calls. Normal mode: 1-2s delays. Demo mode: 3-6s delays for human-paced viewing |
 
 ### Attack Simulation Profiles
 Each simulated attacker is assigned one of 8 random profiles. Each profile selects from 5 phase-based step pools (56 unique tool call variants across all 10 tools):

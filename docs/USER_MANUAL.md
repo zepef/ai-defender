@@ -313,7 +313,8 @@ The homepage displays a real-time 3D visualization of all active honeypot sessio
 **Control Bar** (bottom-center):
 - **Reset button**: Deletes all sessions, interactions, and tokens from the database. Requires double-click confirmation (first click shows "Confirm?", auto-cancels after 3 seconds)
 - **Count input**: Number of attacks to launch (1-20, default 3)
-- **Launch button**: Creates N simulated attack sessions that auto-run realistic multi-tool call sequences with 1-2 second delays between steps. Each attack is assigned one of 8 random profiles (Recon Scout, Credential Harvester, Cloud Exfiltrator, Infrastructure Mapper, Vault Raider, Full Chain, SQLmap Expert, Lateral Mover) covering all 10 honeypot tools with 56 unique argument variations
+- **Launch button**: Creates N simulated attack sessions that auto-run realistic multi-tool call sequences. Each attack is assigned one of 8 random profiles (Recon Scout, Credential Harvester, Cloud Exfiltrator, Infrastructure Mapper, Vault Raider, Full Chain, SQLmap Expert, Lateral Mover) covering all 10 honeypot tools with 56 unique argument variations
+- **Demo checkbox**: When checked, attack steps use 3-6 second delays (instead of 1-2 seconds) so humans can comfortably watch events unfold in real time. Amber-tinted when active
 - Both buttons are disabled while a request is in-flight (loading spinner shown)
 
 **Interaction:**
@@ -1093,10 +1094,10 @@ Launch simulated attack sessions.
 
 **Request:**
 ```json
-{"count": 3}
+{"count": 3, "demo": true}
 ```
 
-The `count` parameter is clamped between 1 and 20. Each attack creates a session with a random attacker name (from a pool of 16 names like "NightCrawler", "VenomProxy", "DarkPulse", etc.) and assigns a random attack profile. The 8 profiles cover all 10 honeypot tools with 56 unique argument combinations organized into 5 phase pools:
+The `count` parameter is clamped between 1 and 20. The optional `demo` flag (default false) switches from 1-2 second delays to 3-6 second delays between steps, making attacks easier to follow in real time. Each attack creates a session with a random attacker name (from a pool of 16 names like "NightCrawler", "VenomProxy", "DarkPulse", etc.) and assigns a random attack profile. The 8 profiles cover all 10 honeypot tools with 56 unique argument combinations organized into 5 phase pools:
 
 - **Recon** (10 variants): nmap quick/stealth scans, DNS A/SRV lookups, shell commands (whoami, uname, id, cat /etc/hosts), browser health check
 - **Credential** (13 variants): file reads (.env, passwd, SSH keys, AWS creds, config.yaml), sqlmap stages (test, databases, tables, dump users/api_keys), browser navigation (users, config, admin)

@@ -377,11 +377,12 @@ ATTACK_PROFILES = [
 ]
 
 
-def _run_attack(app, registry, session_id: str, steps: list) -> None:
+def _run_attack(app, registry, session_id: str, steps: list, demo: bool = False) -> None:
     """Execute a sequence of tool calls with random delays (runs in background thread)."""
+    delay_range = (3.0, 6.0) if demo else (1.0, 2.0)
     with app.app_context():
         for tool_name, arguments in steps:
-            time.sleep(random.uniform(1.0, 2.0))
+            time.sleep(random.uniform(*delay_range))
             try:
                 registry.dispatch(tool_name, arguments, session_id)
             except Exception:
@@ -413,6 +414,7 @@ def admin_reset():
 def admin_simulate():
     body = request.get_json(silent=True) or {}
     count = max(1, min(int(body.get("count", 3)), 20))
+    demo = bool(body.get("demo", False))
 
     app = current_app._get_current_object()
     sm = current_app._session_manager  # type: ignore[attr-defined]
@@ -431,7 +433,7 @@ def admin_simulate():
             picked = random.sample(pool, min(pick_count, len(pool)))
             steps.extend(picked)
 
-        thread = Thread(target=_run_attack, args=(app, registry, sid, steps), daemon=True)
+        thread = Thread(target=_run_attack, args=(app, registry, sid, steps, demo), daemon=True)
         thread.start()
 
     return jsonify({"launched": count, "session_ids": session_ids})
