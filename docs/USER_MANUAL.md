@@ -313,7 +313,7 @@ The homepage displays a real-time 3D visualization of all active honeypot sessio
 **Control Bar** (bottom-center):
 - **Reset button**: Deletes all sessions, interactions, and tokens from the database. Requires double-click confirmation (first click shows "Confirm?", auto-cancels after 3 seconds)
 - **Count input**: Number of attacks to launch (1-20, default 3)
-- **Launch button**: Creates N simulated attack sessions that auto-run realistic multi-tool call sequences with 1-2 second delays between steps. Each attack picks a random subset of 4-8 steps from a realistic progression (nmap scan, DNS lookup, file read, shell exec, SQL injection, browser navigation, AWS CLI access)
+- **Launch button**: Creates N simulated attack sessions that auto-run realistic multi-tool call sequences with 1-2 second delays between steps. Each attack is assigned one of 8 random profiles (Recon Scout, Credential Harvester, Cloud Exfiltrator, Infrastructure Mapper, Vault Raider, Full Chain, SQLmap Expert, Lateral Mover) covering all 10 honeypot tools with 56 unique argument variations
 - Both buttons are disabled while a request is in-flight (loading spinner shown)
 
 **Interaction:**
@@ -1096,7 +1096,15 @@ Launch simulated attack sessions.
 {"count": 3}
 ```
 
-The `count` parameter is clamped between 1 and 20. Each attack creates a session with a random attacker name (from a pool of 16 names like "NightCrawler", "VenomProxy", "DarkPulse", etc.) and spawns a background thread that runs 4-8 tool calls with 1-2 second random delays between steps. The endpoint returns immediately; SSE events flow to the frontend in real time as the attacks progress.
+The `count` parameter is clamped between 1 and 20. Each attack creates a session with a random attacker name (from a pool of 16 names like "NightCrawler", "VenomProxy", "DarkPulse", etc.) and assigns a random attack profile. The 8 profiles cover all 10 honeypot tools with 56 unique argument combinations organized into 5 phase pools:
+
+- **Recon** (10 variants): nmap quick/stealth scans, DNS A/SRV lookups, shell commands (whoami, uname, id, cat /etc/hosts), browser health check
+- **Credential** (13 variants): file reads (.env, passwd, SSH keys, AWS creds, config.yaml), sqlmap stages (test, databases, tables, dump users/api_keys), browser navigation (users, config, admin)
+- **Cloud** (7 variants): AWS S3 list/copy, IAM list-users, SecretsManager list/get, Lambda list, EC2 describe
+- **Infrastructure** (11 variants): kubectl get pods/services/secrets, describe secrets (db/admin/ssh), logs, docker registry list/inspect/pull
+- **Vault** (8 variants): vault status, list secret paths, read prod secrets (db, aws, api-keys, ssh, admin)
+
+Each profile picks random steps from its assigned phases, spawns a background thread with 1-2 second delays between steps. The endpoint returns immediately; SSE events flow to the frontend in real time as the attacks progress.
 
 **Response:**
 ```json

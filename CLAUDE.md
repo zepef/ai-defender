@@ -85,18 +85,28 @@ The `interaction` event includes:
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
 | `/api/admin/reset` | POST | Wipes all sessions/interactions/tokens, clears session cache, publishes zeroed stats via SSE |
-| `/api/admin/simulate` | POST | Accepts `{"count": N}` (1-20), creates N sessions with random attacker names, spawns background threads running 4-8 tool calls each with 1-2s delays |
+| `/api/admin/simulate` | POST | Accepts `{"count": N}` (1-20), creates N sessions with random attacker names, assigns a random attack profile, spawns background threads running tool calls with 1-2s delays |
 
-### Attack Simulation Sequence
-Each simulated attack picks a random subset (4-8 steps) from:
-1. `nmap_scan` (target: "10.0.1.0/24") -- recon
-2. `dns_lookup` (domain: "corp.internal") -- recon
-3. `file_read` (path: "/app/.env") -- credential harvest
-4. `shell_exec` (command: "whoami") -- system info
-5. `sqlmap_scan` (action: "test") -- vuln testing
-6. `sqlmap_scan` (action: "dump", table: "users") -- credential dump
-7. `browser_navigate` (url: "/api/config") -- lateral movement
-8. `aws_cli` (command: "s3 ls") -- cloud access
+### Attack Simulation Profiles
+Each simulated attacker is assigned one of 8 random profiles. Each profile selects from 5 phase-based step pools (56 unique tool call variants across all 10 tools):
+
+| Profile | Phases | Tools Used | Steps |
+|---------|--------|-----------|-------|
+| Recon Scout | recon(3) + credential(2) | nmap, dns, shell, browser, file_read, sqlmap | 5 |
+| Credential Harvester | recon(1) + credential(5) | shell, file_read, sqlmap, browser | 6 |
+| Cloud Exfiltrator | recon(1) + credential(2) + cloud(4) | nmap, file_read, sqlmap, aws_cli | 7 |
+| Infrastructure Mapper | recon(2) + infra(5) | nmap, dns, kubectl, docker_registry | 7 |
+| Vault Raider | recon(1) + vault(5) | shell, vault_cli | 6 |
+| Full Chain | recon(2) + credential(2) + cloud(2) + infra(2) + vault(2) | all 10 tools | 10 |
+| SQLmap Expert | recon(1) + credential(4) + cloud(2) | dns, file_read, sqlmap, browser, aws_cli | 7 |
+| Lateral Mover | recon(2) + infra(3) + vault(3) | nmap, shell, kubectl, docker_registry, vault_cli | 8 |
+
+**Step pools:**
+- **Recon** (10 variants): nmap quick/stealth, dns A/SRV, shell whoami/uname/id/hosts, browser health
+- **Credential** (13 variants): file_read .env/passwd/ssh/aws/config, sqlmap test/databases/tables/dump, browser users/config/admin
+- **Cloud** (7 variants): aws s3 ls/cp, iam list-users, secretsmanager list/get, lambda list, ec2 describe
+- **Infrastructure** (11 variants): kubectl get pods/services/secrets, describe secret db/admin/ssh, logs, docker list/inspect/pull
+- **Vault** (8 variants): vault status, list secret/, list secret/prod, read db/aws/api-keys/ssh/admin
 
 ## Particle Colors by Tool
 

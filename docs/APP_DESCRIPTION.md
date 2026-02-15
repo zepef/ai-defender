@@ -463,7 +463,7 @@ Two `@before_request` hooks run on every API request:
 | `/api/sessions/<id>/tokens` | GET | All honey tokens deployed in a session |
 | `/api/tokens` | GET | Paginated global token list. Supports `token_type` filter |
 | `/api/admin/reset` | POST | Deletes all sessions (cascades to interactions and tokens), clears session cache, publishes zeroed stats via EventBus |
-| `/api/admin/simulate` | POST | Accepts `{"count": N}` (clamped 1-20). Creates N sessions with random attacker names from a 16-name pool, spawns background threads that run 4-8 tool calls each with 1-2 second random delays. Returns immediately with `{"launched": N, "session_ids": [...]}` |
+| `/api/admin/simulate` | POST | Accepts `{"count": N}` (clamped 1-20). Creates N sessions with random attacker names from a 16-name pool, assigns each a random attack profile (one of 8 profiles covering all 10 tools), spawns background threads that run the profile's tool calls with 1-2 second delays. Returns immediately with `{"launched": N, "session_ids": [...]}`. Profiles range from Recon Scout (5 steps) to Full Chain (10 steps across all tools), with 56 unique tool call variants organized into 5 phase pools (recon, credential, cloud, infrastructure, vault). |
 
 Pagination is clamped: limit between 1 and 200, offset minimum 0.
 
