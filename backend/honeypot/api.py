@@ -412,6 +412,8 @@ def admin_reset():
 
 @api_bp.route("/admin/simulate", methods=["POST"])
 def admin_simulate():
+    from shared.event_bus import EventBus
+
     body = request.get_json(silent=True) or {}
     count = max(1, min(int(body.get("count", 3)), 20))
     demo = bool(body.get("demo", False))
@@ -419,6 +421,16 @@ def admin_simulate():
     app = current_app._get_current_object()
     sm = current_app._session_manager  # type: ignore[attr-defined]
     registry = current_app._registry  # type: ignore[attr-defined]
+
+    # Auto-reset: clear all previous sessions before launching new ones
+    db_path = _db_path()
+    clear_all_data(db_path)
+    with sm._lock:
+        sm._cache.clear()
+        sm._cache_times.clear()
+    bus: EventBus | None = current_app.config.get("EVENT_BUS")
+    if bus:
+        bus.publish("stats", get_stats(db_path))
 
     session_ids = []
     for _ in range(count):

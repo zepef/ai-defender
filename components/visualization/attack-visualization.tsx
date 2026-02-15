@@ -236,6 +236,7 @@ function ControlBar({ onReset, ttsMuted, onToggleTts }: { onReset: () => void; t
 
   const handleLaunch = async () => {
     setLoading(true);
+    onReset(); // Clear 3D state, prompt monitor, and TTS before launching
     try {
       await fetch("/api/admin/simulate", {
         method: "POST",
